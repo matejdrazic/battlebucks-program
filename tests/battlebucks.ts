@@ -8,9 +8,9 @@ describe("battlebucks", () => {
 
   const program = anchor.workspace.Battlebucks as Program<Battlebucks>;
 
-  it("Is initialized!", async () => {
+  it("Create lobby", async () => {
     // Add your test here.
-    const tx = await program.methods.initialize().rpc();
+    const tx = await program.methods.createLobby().rpc();
     console.log("Your transaction signature", tx);
   });
 });
