@@ -9,8 +9,10 @@ describe("battlebucks", () => {
   const program = anchor.workspace.Battlebucks as Program<Battlebucks>;
 
   it("Create lobby", async () => {
-    // Add your test here.
-    const tx = await program.methods.createLobby().rpc();
+
+    const lobbyId = new anchor.BN(1);
+
+    const tx = await program.methods.createLobby(lobbyId).rpc();
     console.log("Your transaction signature", tx);
   });
 });
