@@ -50,7 +50,7 @@ pub mod battlebucks {
 /// CONTEXTS
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    #[account(init, payer = admin, space = 8 + 32, seeds = [INIT_SEED, admin.key().as_ref()], bump)]
+    #[account(init, payer = admin, space = 8 + 32, seeds = [AUTH_SEED, admin.key().as_ref()], bump)]
     pub auth_config: Account<'info, AuthConfig>,
     /// The admin wallet that will be authorized to create lobbies
     #[account(mut)]
@@ -65,9 +65,18 @@ pub struct Initialize<'info> {
 pub struct CreateLobby<'info> {
     #[account(init, payer = backend_auth_wallet, space = 8 + 8 + 8 + 1 + 1 + 1 + 1 + 32, seeds = [LOBBY_SEED, lobby_id.to_le_bytes().as_ref()], bump)]
     pub lobby: Account<'info, Lobby>,
-    /// The player who is creating the lobby
+    /// The wallet who is responsible for creating the lobby
     #[account(mut)]
     pub backend_auth_wallet: Signer<'info>,
+    /// Auth config that stores the expected backend wallet pubkey
+    #[account(
+        seeds = [AUTH_SEED, admin.key().as_ref()],
+        bump,
+        constraint = auth_config.backend_auth_wallet == backend_auth_wallet.key()
+    )]
+    pub auth_config: Account<'info, AuthConfig>,
+    /// CHECK: Admin wallet
+    pub admin: AccountInfo<'info>,
     /// The system program
     pub system_program: Program<'info, System>,
 }

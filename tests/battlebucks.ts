@@ -16,6 +16,8 @@ describe("battlebucks", async () => {
   const backendAuthWalletPubkey = backendAuthWallet.publicKey;
   // const backendAuthWalletSecret = backendAuthWallet.secretKey;
 
+  let authConfigPDA, bump
+
 
   // Fund the backend auth wallet
   it("Fund wallets", async () => {
@@ -29,8 +31,8 @@ describe("battlebucks", async () => {
   it("Initialize program with auth config", async () => {
 
     // Verify the backend auth wallet is set in the program state
-    const [authConfigPDA, bump] = PublicKey.findProgramAddressSync(
-      [Buffer.from("init"), wallet.toBuffer()],
+    [authConfigPDA, bump] = PublicKey.findProgramAddressSync(
+      [Buffer.from("auth"), wallet.toBuffer()],
       program.programId
     );
 
@@ -73,6 +75,8 @@ describe("battlebucks", async () => {
       .accounts({
         lobby: lobbyPDA,
         backendAuthWallet: backendAuthWalletPubkey,
+        authConfig: authConfigPDA,
+        admin: wallet,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
       .signers([backendAuthWallet])
