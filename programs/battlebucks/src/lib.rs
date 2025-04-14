@@ -1,4 +1,6 @@
 use anchor_lang::prelude::*;
+use anchor_lang::system_program::{transfer, Transfer};
+
 
 // Imports
 mod constants;
@@ -6,17 +8,6 @@ use crate::constants::*;
 
 
 declare_id!("215rECMPco6vSdPqnw5yS6F4FPsqpc3vWkJRkesUTRoP");
-
-/**
- * Functions expected in the battlebucks program
- * create_lobby()
- * join_lobby()
- * refund()
- * start_game()
- * end_game()
- * update_rake()
- * optional: update wallet, etc.
- */
 
 
 #[program]
@@ -35,12 +26,15 @@ pub mod battlebucks {
     }
 
     // Function to 'create' a new game lobby account
-    //// Restrict function to only be callable by the backend auth wallet
-    pub fn create_lobby(ctx: Context<CreateLobby>, lobby_id: u64, _buy_in_amount: u64, _rake_percentage: u8, _max_players_in_lobby: Option<u8>) -> Result<()> {
+    //// Make sure rake_percentage <= 100 & max players is satisfied
+    pub fn create_lobby(ctx: Context<CreateLobby>, lobby_id: u64, buy_in_amount: u64, rake_percentage: u8, max_players_in_lobby: Option<u8>) -> Result<()> {
         
         // Initialize the lobby account
         let lobby = &mut ctx.accounts.lobby; 
         lobby.lobby_id = lobby_id;
+        lobby.buy_in_amount = buy_in_amount;
+        lobby.rake_percentage = rake_percentage;
+        lobby.max_players_in_lobby = max_players_in_lobby;        
         
         Ok(())
     }
@@ -48,22 +42,103 @@ pub mod battlebucks {
     // Function invoked by player to join a specific lobby
     pub fn join_lobby(ctx: Context<JoinLobby>, lobby_id: u64) -> Result<()> {
 
+        // Get player PDA and lobby PDA
+        let player = &mut ctx.accounts.player;
+        let lobby = &mut ctx.accounts.lobby;
+
         ////// PLAYER PDA LOGIC
         // Initialize the player account
-        let player = &mut ctx.accounts.player;
         player.lobby_id = lobby_id;
+        // Put lobby PDA in the player PDA
+        player.lobby_pda = lobby.key();
+        // Set the player public key to the player's wallet address
         player.player_pubkey = ctx.accounts.player_wallet.key();
 
 
         ///// LOBBY PDA LOGIC
         // Increment the current players in lobby
-        let lobby = &mut ctx.accounts.lobby;
         lobby.current_players_in_lobby += 1;
-        // Put lobby PDA in the player PDA
-        player.lobby_pda = lobby.key();
-
         // Add the player PDA to the lobby's player PDAs
-        lobby.player_pdas.push(ctx.accounts.player.key()); // CHECK: Maybe this vector is not necessary in storage
+        lobby.player_pdas.push(player.key()); // CHECK: Maybe this vector is not necessary in storage
+
+
+        //Transfer the buy-in amount from the player to the lobby escrow account (PDA)
+        let from_pubkey = ctx.accounts.player_wallet.to_account_info();
+        let to_pubkey = ctx.accounts.escrow.to_account_info();
+        let program_id = ctx.accounts.system_program.to_account_info();
+
+        let cpi_context = CpiContext::new(
+            program_id,
+            Transfer {
+                from: from_pubkey,
+                to: to_pubkey,
+            },
+        );
+
+        transfer(cpi_context, lobby.buy_in_amount)?;
+
+
+        Ok(())
+    }
+
+    // Function the player calls to leave lobby and get refund
+    ///// Function will refund user the lobby buy-in amount and close the PlayerInLobby PDA
+    ///// We need to make sure the player closing the PDA is in fact the player who joined the lobby
+    pub fn refund(ctx: Context<LeaveLobby>, lobby_id: u64) -> Result<()> {
+
+        // Get the lobby PDA and player in lobby PDA
+        let lobby = &mut ctx.accounts.lobby;
+        let player = &mut ctx.accounts.player;
+
+        // Decrement the current players in lobby
+        lobby.current_players_in_lobby -= 1;
+        // Remove the player PDA from the lobby's player PDAs
+        lobby.player_pdas.retain(|&x| x != player.key()); // CHECK: Maybe this vector is not necessary in storage
+
+
+        // Transfer funds from escrow to player wallet
+        let from_pubkey = ctx.accounts.escrow.to_account_info();
+        let to_pubkey = ctx.accounts.player_wallet.to_account_info();
+        let program_id = ctx.accounts.system_program.to_account_info();
+
+        let seed = lobby_id.to_le_bytes();
+        let bump_seed = ctx.bumps.escrow;
+        let signer_seeds: &[&[&[u8]]] = &[&[ESCROW_SEED, seed.as_ref(), &[bump_seed]]];
+
+        let cpi_context = CpiContext::new(
+            program_id,
+            Transfer {
+                from: from_pubkey,
+                to: to_pubkey,
+            },
+        ).with_signer(signer_seeds);
+
+        transfer(cpi_context, lobby.buy_in_amount)?;
+
+        Ok(())
+    }
+
+
+    // Function to start the game
+    pub fn start_game(ctx: Context<JoinLobby>, lobby_id: u64) -> Result<()> {
+
+        Ok(())
+    }
+
+    // Function to end the game
+    pub fn end_game(ctx: Context<JoinLobby>, lobby_id: u64) -> Result<()> {
+
+        Ok(())
+    }
+
+    // Function to update rake
+    pub fn update_rake(ctx: Context<JoinLobby>, lobby_id: u64, rake_percentage: u8) -> Result<()> {
+
+        Ok(())
+    }
+
+    // Function to update auth config
+    pub fn update_auth_config(ctx: Context<Initialize>, admin: Pubkey, backend_auth_wallet: Pubkey) -> Result<()> {
 
         Ok(())
     }
@@ -87,7 +162,7 @@ pub struct Initialize<'info> {
 pub struct CreateLobby<'info> { // CHECK: Hardcoded 10 as max players (stress test later)
     #[account(init, payer = backend_auth_wallet, space = 8 + 8 + 8 + 1 + 1 + 1 + 1 + 32 + 4 + 32 * 20, seeds = [LOBBY_SEED, lobby_id.to_le_bytes().as_ref()], bump)]
     pub lobby: Account<'info, Lobby>,
-    /// The wallet who is responsible for creating the lobby
+    // The wallet who is responsible for creating the lobby
     #[account(mut)]
     pub backend_auth_wallet: Signer<'info>,
     /// Auth config that stores the expected backend wallet pubkey
@@ -105,8 +180,12 @@ pub struct CreateLobby<'info> { // CHECK: Hardcoded 10 as max players (stress te
 #[derive(Accounts)]
 #[instruction(lobby_id: u64)]
 pub struct JoinLobby<'info> {
+    // Initializes the player in lobby PDA
     #[account(init, payer = player_wallet, space = 8 + 8 + 32 + 32, seeds = [PLAYER_SEED, lobby_id.to_le_bytes().as_ref(), player_wallet.key().as_ref()], bump)]
     pub player: Account<'info, PlayerInLobby>,
+    // The escrow account that will hold the buy-in amount
+    #[account(mut, seeds = [ESCROW_SEED, lobby_id.to_le_bytes().as_ref()], bump)]
+    pub escrow: SystemAccount<'info>,
     // Player wallet who is joining the lobby
     #[account(
         mut,
@@ -119,6 +198,36 @@ pub struct JoinLobby<'info> {
     pub player_wallet: Signer<'info>,
     // The system program
     pub system_program: Program<'info, System>,
+}
+
+
+#[derive(Accounts)]
+#[instruction(lobby_id: u64)]
+pub struct LeaveLobby <'info> {
+    // The player PDA that will be closed
+    #[account(
+        mut, 
+        close = player_wallet, 
+        seeds = [PLAYER_SEED, lobby_id.to_le_bytes().as_ref(), player_wallet.key().as_ref()], 
+        bump,
+        constraint = player.player_pubkey == player_wallet.key(),
+    )]
+    pub player: Account<'info, PlayerInLobby>,
+    // The lobby PDA
+    #[account(
+        mut,
+        seeds = [LOBBY_SEED, lobby_id.to_le_bytes().as_ref()],
+        bump,
+    )]
+    pub lobby: Account<'info, Lobby>,
+    // The escrow account that will be closed
+    #[account(mut, seeds = [ESCROW_SEED, lobby_id.to_le_bytes().as_ref()], bump)]
+    pub escrow: SystemAccount<'info>, /// CHECK: This is the correct escrow account for lobby
+    // The system program
+    pub system_program: Program<'info, System>,
+    // Player wallet who is leaving the lobby
+    #[account(mut)]
+    pub player_wallet: Signer<'info>,
 }
 
 
