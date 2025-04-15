@@ -12,9 +12,20 @@ describe("battlebucks", async () => {
 
   const wallet = program.provider.publicKey;
 
+  // Derive a new wallet for the backend auth
   const backendAuthWallet = anchor.web3.Keypair.generate();
   const backendAuthWalletPubkey = backendAuthWallet.publicKey;
   // const backendAuthWalletSecret = backendAuthWallet.secretKey;
+
+  // Derive a new wallet for the house rake
+  const houseRakeWallet = anchor.web3.Keypair.generate();
+  const houseRakeWalletPubkey = houseRakeWallet.publicKey;
+  // const houseRakeWalletSecret = houseRakeWallet.secretKey;
+
+  // Derive a new wallet for the end game funds recipient (provided by backend auth wallet)
+  const endGameFundsRecipient = anchor.web3.Keypair.generate();
+  const endGameFundsRecipientPubkey = endGameFundsRecipient.publicKey;
+  // const endGameFundsRecipientSecret = endGameFundsRecipient.secretKey;
 
   // Create a new wallet for the player
   const playerWallet = anchor.web3.Keypair.generate();
@@ -59,10 +70,23 @@ describe("battlebucks", async () => {
       program.programId
     );
 
+    const [globalStatePDA, bump2] = PublicKey.findProgramAddressSync(
+      [Buffer.from("global_state")],
+      program.programId
+    );
+
+    const rakePercentage = 10; // 10% rake
+
     const tx = await program.methods
-      .initialize(wallet, backendAuthWalletPubkey)
+      .initialize(
+        wallet,
+        backendAuthWalletPubkey,
+        houseRakeWalletPubkey,
+        rakePercentage
+      )
       .accounts({
         authConfig: authConfigPDA,
+        globalState: globalStatePDA,
         deployer: wallet,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
@@ -79,12 +103,16 @@ describe("battlebucks", async () => {
     expect(authConfigAccount.backendAuthWallet.toString()).to.equal(
       backendAuthWalletPubkey.toString()
     );
+
+    // Assert correct house rake wallet was saved in AuthConfig account
+    expect(authConfigAccount.houseWallet.toString()).to.equal(
+      houseRakeWalletPubkey.toString()
+    );
   });
 
   it("Create lobby", async () => {
     const lobbyId = new anchor.BN(1);
     const buyInAmount = new anchor.BN(100000000); // 0.1 SOL
-    const rakePercentage = 10; // 10% rake
     const maxPlayers = 20;
 
     // Find the PDA for the lobby
@@ -93,11 +121,18 @@ describe("battlebucks", async () => {
       program.programId
     );
 
+    // Find the PDA for the global state account
+    const [globalStatePDA, bump2] = PublicKey.findProgramAddressSync(
+      [Buffer.from("global_state")],
+      program.programId
+    );
+
     const tx = await program.methods
-      .createLobby(lobbyId, buyInAmount, rakePercentage, maxPlayers)
+      .createLobby(lobbyId, buyInAmount, maxPlayers)
       .accounts({
         lobby: lobbyPDA,
         backendAuthWallet: backendAuthWalletPubkey,
+        globalState: globalStatePDA,
         authConfig: authConfigPDA,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
@@ -115,7 +150,6 @@ describe("battlebucks", async () => {
   it("Create another lobby", async () => {
     const lobbyId = new anchor.BN(2);
     const buyInAmount = new anchor.BN(1000000);
-    const rakePercentage = 10; // 10% rake
     const maxPlayers = 20;
 
     // Find the PDA for the lobby
@@ -124,11 +158,18 @@ describe("battlebucks", async () => {
       program.programId
     );
 
+    // Find the PDA for the global state account
+    const [globalStatePDA, bump2] = PublicKey.findProgramAddressSync(
+      [Buffer.from("global_state")],
+      program.programId
+    );
+
     const tx = await program.methods
-      .createLobby(lobbyId, buyInAmount, rakePercentage, maxPlayers)
+      .createLobby(lobbyId, buyInAmount, maxPlayers)
       .accounts({
         lobby: lobbyPDA,
         backendAuthWallet: backendAuthWalletPubkey,
+        globalState: globalStatePDA,
         authConfig: authConfigPDA,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
@@ -145,7 +186,6 @@ describe("battlebucks", async () => {
   it("Non authorized wallet can not create lobby", async () => {
     const lobbyId = new anchor.BN(2);
     const buyInAmount = new anchor.BN(1000000);
-    const rakePercentage = 10; // 10% rake
     const maxPlayers = 20;
 
     // Verify the backend auth wallet is set in the program state
@@ -154,12 +194,18 @@ describe("battlebucks", async () => {
       program.programId
     );
 
+    const [globalStatePDA, bump2] = PublicKey.findProgramAddressSync(
+      [Buffer.from("global_state")],
+      program.programId
+    );
+
     try {
       await program.methods
-        .createLobby(lobbyId, buyInAmount, rakePercentage, maxPlayers)
+        .createLobby(lobbyId, buyInAmount, maxPlayers)
         .accounts({
           lobby: lobbyPDA,
           backendAuthWallet: wallet,
+          globalState: globalStatePDA,
           authConfig: authConfigPDA,
           systemProgram: anchor.web3.SystemProgram.programId,
         })
@@ -458,12 +504,10 @@ describe("battlebucks", async () => {
 
     // Assert correct game state after starting game
     // expect(lobbyAccount.gameState).to.equal(true);
-    expect(lobbyAccount.gameState.inProgress)
+    expect(lobbyAccount.gameState.inProgress);
   });
 
-
-  it("Plyaer can not join lobby if game already started", async () => {
-
+  it("Player can not join lobby if game already started", async () => {
     const lobbyId = new anchor.BN(1);
 
     // Find the PDA for the player in lobby
@@ -500,11 +544,9 @@ describe("battlebucks", async () => {
       expect(err).to.exist;
       // console.log("Transaction failed as expected:", err);
     }
-  })
-
+  });
 
   it("Player can not leave lobby if game already started", async () => {
-
     const lobbyId = new anchor.BN(1);
 
     // Find the PDA for the player in lobby
@@ -541,5 +583,69 @@ describe("battlebucks", async () => {
       expect(err).to.exist;
       // console.log("Transaction failed as expected:", err);
     }
-  })
+  });
+
+  it("End game successfully", async () => {
+    const lobbyId = new anchor.BN(1);
+
+    // Get balance of the rake wallet before ending the game
+    const houseRakeBalanceBefore = await program.provider.connection.getBalance(
+      houseRakeWalletPubkey
+    );
+
+    // Get balance of the end game funds recipient before ending the game
+    const endGameFundsRecipientBalanceBefore =
+      await program.provider.connection.getBalance(endGameFundsRecipientPubkey);
+
+    // Find the PDA for the escrow account
+    const [escrowPDA, bump2] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("escrow"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      program.programId
+    );
+
+    const tx = await program.methods
+      .endGame(lobbyId)
+      .accounts({
+        lobby: lobbyPDA,
+        escrow: escrowPDA,
+        houseWallet: houseRakeWalletPubkey,
+        recipientWallet: endGameFundsRecipientPubkey,
+        backendAuthWallet: backendAuthWalletPubkey,
+        authConfig: authConfigPDA,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([backendAuthWallet])
+      .rpc();
+    console.log("Your transaction signature", tx);
+
+    // Get the balance of the escrow account
+    const escrowBalance = await program.provider.connection.getBalance(
+      escrowPDA
+    );
+
+    // Get the balance of the house rake wallet
+    const houseRakeBalance = await program.provider.connection.getBalance(
+      houseRakeWalletPubkey
+    );
+
+    // Get the balance of the end game funds recipient wallet
+    const endGameFundsRecipientBalance =
+      await program.provider.connection.getBalance(endGameFundsRecipientPubkey);
+
+    // Expect the escrow account to be empty
+    expect(escrowBalance.toString()).to.equal("0");
+
+    // Expect the house rake wallet to have received the rake amount
+    expect(houseRakeBalance).to.equal(
+      houseRakeBalanceBefore + 20000000 // 0.02 SOL
+    );
+
+    // Expect the end game funds recipient wallet to have received the remaining balance
+    expect(endGameFundsRecipientBalance).to.equal(
+      endGameFundsRecipientBalanceBefore + 180000000 // 0.18 SOL
+    );
+  });
+
+
+  it("Update rake percentage", async () => {})
 });
