@@ -82,8 +82,6 @@ pub mod battlebucks {
     }
 
     // Function the player calls to leave lobby and get refund
-    ///// Function will refund user the lobby buy-in amount and close the PlayerInLobby PDA
-    ///// We need to make sure the player closing the PDA is in fact the player who joined the lobby
     pub fn refund(ctx: Context<LeaveLobby>, lobby_id: u64) -> Result<()> {
 
         // Get the lobby PDA and player in lobby PDA
@@ -120,38 +118,55 @@ pub mod battlebucks {
 
 
     // Function to start the game
-    pub fn start_game(ctx: Context<JoinLobby>, lobby_id: u64) -> Result<()> {
+    pub fn start_game(ctx: Context<StartGame>, _lobby_id: u64) -> Result<()> {
+
+        // Get the lobby PDA
+        let lobby = &mut ctx.accounts.lobby;
+
+        // Set the game state to InProgress
+        lobby.game_state = GameState::InProgress;
 
         Ok(())
     }
 
     // Function to end the game
-    pub fn end_game(ctx: Context<JoinLobby>, lobby_id: u64) -> Result<()> {
+    pub fn end_game(ctx: Context<EndGame>, _lobby_id: u64, _recipient: Pubkey) -> Result<()> {
+
+        // Close the lobby (?) and escrow PDA accounts
+        // Pay out 2 provided wallets
+
+        // Get the lobby PDA
+        let lobby = &mut ctx.accounts.lobby;
+
+        // Set the game state to Ended
+        lobby.game_state = GameState::Ended;
 
         Ok(())
     }
 
+    /*
     // Function to update rake
-    pub fn update_rake(ctx: Context<JoinLobby>, lobby_id: u64, rake_percentage: u8) -> Result<()> {
+    pub fn update_rake(ctx: Context<UpdateRake>, lobby_id: u64, rake_percentage: u8) -> Result<()> {
 
         Ok(())
     }
 
     // Function to update auth config
-    pub fn update_auth_config(ctx: Context<Initialize>, admin: Pubkey, backend_auth_wallet: Pubkey) -> Result<()> {
+    pub fn update_auth_config(ctx: Context<UpdateAuthConfig>, admin: Pubkey, backend_auth_wallet: Pubkey) -> Result<()> {
 
         Ok(())
     }
+    */
 }
 
 /// CONTEXTS
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    #[account(init, payer = admin, space = 8 + 32 + 32, seeds = [AUTH_SEED], bump)]
+    #[account(init, payer = deployer, space = 8 + 32 + 32, seeds = [AUTH_SEED], bump)]
     pub auth_config: Account<'info, AuthConfig>,
     /// The admin wallet that will be authorized to create lobbies
     #[account(mut)]
-    pub admin: Signer<'info>,
+    pub deployer: Signer<'info>,
     /// The system program
     pub system_program: Program<'info, System>,
 }
@@ -181,7 +196,7 @@ pub struct CreateLobby<'info> { // CHECK: Hardcoded 10 as max players (stress te
 #[instruction(lobby_id: u64)]
 pub struct JoinLobby<'info> {
     // Initializes the player in lobby PDA
-    #[account(init, payer = player_wallet, space = 8 + 8 + 32 + 32, seeds = [PLAYER_SEED, lobby_id.to_le_bytes().as_ref(), player_wallet.key().as_ref()], bump)]
+    #[account(init, payer = player_wallet, space = 8 + 8 + 32 + 32 + 32, seeds = [PLAYER_SEED, lobby_id.to_le_bytes().as_ref(), player_wallet.key().as_ref()], bump)]
     pub player: Account<'info, PlayerInLobby>,
     // The escrow account that will hold the buy-in amount
     #[account(mut, seeds = [ESCROW_SEED, lobby_id.to_le_bytes().as_ref()], bump)]
@@ -192,6 +207,7 @@ pub struct JoinLobby<'info> {
         seeds = [LOBBY_SEED, lobby_id.to_le_bytes().as_ref()],
         bump,
         // constraint = lobby.current_players_in_lobby < lobby.max_players_in_lobby.unwrap_or(0)
+        constraint = lobby.game_state == GameState::NotStarted,
     )]
     pub lobby: Account<'info, Lobby>,
     #[account(mut)]
@@ -218,6 +234,7 @@ pub struct LeaveLobby <'info> {
         mut,
         seeds = [LOBBY_SEED, lobby_id.to_le_bytes().as_ref()],
         bump,
+        constraint = lobby.game_state == GameState::NotStarted,
     )]
     pub lobby: Account<'info, Lobby>,
     // The escrow account that will be closed
@@ -228,6 +245,63 @@ pub struct LeaveLobby <'info> {
     // Player wallet who is leaving the lobby
     #[account(mut)]
     pub player_wallet: Signer<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction(lobby_id: u64)]
+pub struct StartGame<'info> {
+    // The lobby PDA
+    #[account(
+        mut,
+        seeds = [LOBBY_SEED, lobby_id.to_le_bytes().as_ref()],
+        bump,
+        constraint = lobby.game_state == GameState::NotStarted,
+    )]
+    pub lobby: Account<'info, Lobby>,
+    // Auth config account
+    #[account(
+        seeds = [AUTH_SEED],
+        bump,
+        constraint = auth_config.backend_auth_wallet == backend_auth_wallet.key()
+    )]
+    pub auth_config: Account<'info, AuthConfig>,
+    // The start game user, must be backend auth wallet
+    pub backend_auth_wallet: Signer<'info>,
+    // The system program
+    pub system_program: Program<'info, System>,
+}
+
+
+#[derive(Accounts)]
+#[instruction(lobby_id: u64)]
+pub struct EndGame<'info> {
+    // The lobby PDA
+    #[account(
+        mut,
+        seeds = [LOBBY_SEED, lobby_id.to_le_bytes().as_ref()],
+        bump,
+        constraint = lobby.game_state == GameState::InProgress,
+    )]
+    pub lobby: Account<'info, Lobby>,
+    // Escrow account that will be closed
+    #[account(
+        mut, 
+        seeds = [ESCROW_SEED, lobby_id.to_le_bytes().as_ref()], 
+        bump,
+    )]
+    pub escrow: SystemAccount<'info>, /// CHECK: This is the correct escrow account for lobby
+    // Auth config account
+    #[account(
+        seeds = [AUTH_SEED],
+        bump,
+        constraint = auth_config.backend_auth_wallet == backend_auth_wallet.key()
+    )]
+    pub auth_config: Account<'info, AuthConfig>,
+    // The end game user, must be backend auth wallet
+    #[account(mut)]
+    pub backend_auth_wallet: Signer<'info>,
+    // The system program
+    pub system_program: Program<'info, System>,
 }
 
 

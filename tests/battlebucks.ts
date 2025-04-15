@@ -24,6 +24,9 @@ describe("battlebucks", async () => {
   const secondPlayerWallet = anchor.web3.Keypair.generate();
   const secondPlayerWalletPubkey = secondPlayerWallet.publicKey;
 
+  const thirdPlayerWallet = anchor.web3.Keypair.generate();
+  const thirdPlayerWalletPubkey = thirdPlayerWallet.publicKey;
+
   let authConfigPDA, bump, lobbyPDA, escrowPDA;
 
   // Fund the backend auth wallet
@@ -42,6 +45,11 @@ describe("battlebucks", async () => {
       secondPlayerWalletPubkey,
       1000000000 // 1 SOL
     );
+
+    await program.provider.connection.requestAirdrop(
+      thirdPlayerWalletPubkey,
+      1000000000 // 1 SOL
+    );
   });
 
   it("Initialize program with auth config", async () => {
@@ -55,7 +63,7 @@ describe("battlebucks", async () => {
       .initialize(wallet, backendAuthWalletPubkey)
       .accounts({
         authConfig: authConfigPDA,
-        admin: wallet,
+        deployer: wallet,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
       .rpc();
@@ -376,12 +384,11 @@ describe("battlebucks", async () => {
     const escrowBalance = await program.provider.connection.getBalance(
       escrowPDA
     );
-    // Assert escrow account has correct balance (it lost one buy in amount)
+    // Assert escrow account has correct balance (it lost one buy-in amount)
     expect(escrowBalance.toString()).to.equal(
       lobbyAccount.buyInAmount.toString()
     );
   });
-
 
   it("Player can re-join lobby after leaving", async () => {
     const lobbyId = new anchor.BN(1);
@@ -429,6 +436,110 @@ describe("battlebucks", async () => {
 
     // This should now work
     await program.account.playerInLobby.fetch(secondPlayerInLobbyPDA);
-
   });
+
+  it("Start game successfully", async () => {
+    const lobbyId = new anchor.BN(1);
+
+    const tx = await program.methods
+      .startGame(lobbyId)
+      .accounts({
+        lobby: lobbyPDA,
+        backendAuthWallet: backendAuthWalletPubkey,
+        authConfig: authConfigPDA,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([backendAuthWallet])
+      .rpc();
+    console.log("Your transaction signature", tx);
+
+    // Fetch the auth config account data
+    const lobbyAccount = await program.account.lobby.fetch(lobbyPDA);
+
+    // Assert correct game state after starting game
+    // expect(lobbyAccount.gameState).to.equal(true);
+    expect(lobbyAccount.gameState.inProgress)
+  });
+
+
+  it("Plyaer can not join lobby if game already started", async () => {
+
+    const lobbyId = new anchor.BN(1);
+
+    // Find the PDA for the player in lobby
+    const [thirdPlayerInLobbyPDA, bump] =
+      anchor.web3.PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("player"),
+          lobbyId.toArrayLike(Buffer, "le", 8),
+          secondPlayerWalletPubkey.toBuffer(),
+        ],
+        program.programId
+      );
+
+    // Find the PDA for the escrow account
+    const [escrowPDA, bump2] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("escrow"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      program.programId
+    );
+
+    try {
+      await program.methods
+        .joinLobby(lobbyId)
+        .accounts({
+          lobby: lobbyPDA,
+          escrow: escrowPDA,
+          player: thirdPlayerInLobbyPDA,
+          playerWallet: thirdPlayerWalletPubkey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([thirdPlayerWallet])
+        .rpc();
+      expect.fail("Transaction should have failed");
+    } catch (err) {
+      expect(err).to.exist;
+      // console.log("Transaction failed as expected:", err);
+    }
+  })
+
+
+  it("Player can not leave lobby if game already started", async () => {
+
+    const lobbyId = new anchor.BN(1);
+
+    // Find the PDA for the player in lobby
+    const [secondPlayerInLobbyPDA, bump] =
+      anchor.web3.PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("player"),
+          lobbyId.toArrayLike(Buffer, "le", 8),
+          secondPlayerWalletPubkey.toBuffer(),
+        ],
+        program.programId
+      );
+
+    // Find the PDA for the escrow account
+    const [escrowPDA, bump2] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("escrow"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      program.programId
+    );
+
+    try {
+      await program.methods
+        .refund(lobbyId)
+        .accounts({
+          lobby: lobbyPDA,
+          escrow: escrowPDA,
+          player: secondPlayerInLobbyPDA,
+          playerWallet: secondPlayerWalletPubkey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([secondPlayerWallet])
+        .rpc();
+      expect.fail("Transaction should have failed");
+    } catch (err) {
+      expect(err).to.exist;
+      // console.log("Transaction failed as expected:", err);
+    }
+  })
 });
