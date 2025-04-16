@@ -4,15 +4,20 @@ use anchor_lang::system_program::{transfer, Transfer};
 
 // Imports
 mod constants;
+mod errors;
 use crate::constants::*;
+use crate::errors::*;
+
+pub const DEFAULT_MAX_PLAYERS: u8 = 50;
+// pub const LOBBY_ID_STRING_MAX_LENGTH: usize = 64;
 
 // Need to:
-//         max players restriction
 //         update id to string instead of u64
 //         security best practices
+//         ask client if they want pdas or player pubkeys in lobby vector
 
 
-declare_id!("215rECMPco6vSdPqnw5yS6F4FPsqpc3vWkJRkesUTRoP");
+declare_id!("85amFNfuER5bEcya8UUMKhvjEVGVjYfuZDEaJy8Ymq9Q");
 
 
 #[program]
@@ -36,7 +41,6 @@ pub mod battlebucks {
     }
 
     // Function to 'create' a new game lobby account
-    //// Make sure rake_percentage <= 100 & max players is satisfied
     pub fn create_lobby(ctx: Context<CreateLobby>, lobby_id: u64, buy_in_amount: u64, max_players_in_lobby: Option<u8>) -> Result<()> {
         
         // Initialize the lobby account
@@ -61,6 +65,15 @@ pub mod battlebucks {
         // Get player PDA and lobby PDA
         let player = &mut ctx.accounts.player;
         let lobby = &mut ctx.accounts.lobby;
+
+        // Check restriction if set in max_players_in_lobby - is lobby full?
+        if let Some(max) = lobby.max_players_in_lobby {
+            require!(
+                lobby.current_players_in_lobby < max,
+                CustomError::LobbyFull
+            )
+        }
+
 
         ////// PLAYER PDA LOGIC
         // Initialize the player account
@@ -272,7 +285,7 @@ pub struct Initialize<'info> {
 #[derive(Accounts)]
 #[instruction(lobby_id: u64, buy_in_amount: u64, max_players_in_lobby: Option<u8>)]
 pub struct CreateLobby<'info> { // CHECK: Hardcoded 10 as max players (stress test later)
-    #[account(init, payer = backend_auth_wallet, space = 8 + 8 + 8 + 1 + 1 + 1 + 1 + 32 * 20, seeds = [LOBBY_SEED, lobby_id.to_le_bytes().as_ref()], bump)]
+    #[account(init, payer = backend_auth_wallet, space = 8 + 8 + 8 + 2 + 1 + 1 + 1 + 4 + 32 * max_players_in_lobby.unwrap_or(DEFAULT_MAX_PLAYERS) as usize, seeds = [LOBBY_SEED, lobby_id.to_le_bytes().as_ref()], bump)]
     pub lobby: Account<'info, Lobby>,
     // The wallet who is responsible for creating the lobby
     #[account(mut)]
@@ -424,6 +437,13 @@ pub struct UpdateRake <'info> {
         constraint = lobby.game_state != GameState::Ended,
     )]
     pub lobby: Account<'info, Lobby>,
+    // The auth config acccount
+    #[account(
+        seeds = [AUTH_SEED],
+        bump,
+        constraint = auth_config.backend_auth_wallet == backend_auth_wallet.key()
+    )]
+    pub auth_config: Account<'info, AuthConfig>,
     // The global state account
     #[account(
         mut,

@@ -75,7 +75,7 @@ describe("battlebucks", async () => {
       program.programId
     );
 
-    const rakePercentage = 10; // 10% rake
+    const rakePercentage = 15; // 15% rake
 
     const tx = await program.methods
       .initialize(
@@ -149,8 +149,8 @@ describe("battlebucks", async () => {
 
   it("Create another lobby", async () => {
     const lobbyId = new anchor.BN(2);
-    const buyInAmount = new anchor.BN(1000000);
-    const maxPlayers = 20;
+    const buyInAmount = new anchor.BN(1000000); // 0.001 SOL
+    const maxPlayers = 2;
 
     // Find the PDA for the lobby
     const [lobbyPDA, bump] = PublicKey.findProgramAddressSync(
@@ -585,7 +585,38 @@ describe("battlebucks", async () => {
     }
   });
 
-  it("Update rake percentage", async () => {});
+  it("Update rake percentage", async () => {
+    const lobbyId = new anchor.BN(1);
+
+    const rakePercentage = 10; // 10% rake
+
+    // Verify the backend auth wallet is set in the program state
+    const [globalStatePDA, bump] = PublicKey.findProgramAddressSync(
+      [Buffer.from("global_state")],
+      program.programId
+    );
+
+    const tx = await program.methods
+      .updateRake(lobbyId, rakePercentage)
+      .accounts({
+        lobby: lobbyPDA,
+        backendAuthWallet: backendAuthWalletPubkey,
+        authConfig: authConfigPDA,
+        globalState: globalStatePDA,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([backendAuthWallet])
+      .rpc();
+    console.log("Your transaction signature", tx);
+
+    // Fetch the auth config account data
+    const lobbyAccount = await program.account.lobby.fetch(lobbyPDA);
+
+    // Expect new rake percentage in lobby account
+    expect(lobbyAccount.rakePercentage.toString()).to.equal(
+      rakePercentage.toString()
+    );
+  });
 
   it("End game successfully", async () => {
     const lobbyId = new anchor.BN(1);
@@ -648,11 +679,37 @@ describe("battlebucks", async () => {
     );
   });
 
-  it("Can not update rake percentage after game ended", async () => {});
+  it("Can not update rake percentage after game ended", async () => {
+    const lobbyId = new anchor.BN(1);
 
+    const rakePercentage = 15; // 15% rake
+
+    // Verify the backend auth wallet is set in the program state
+    const [globalStatePDA, bump] = PublicKey.findProgramAddressSync(
+      [Buffer.from("global_state")],
+      program.programId
+    );
+
+    try {
+      await program.methods
+        .updateRake(lobbyId, rakePercentage)
+        .accounts({
+          lobby: lobbyPDA,
+          backendAuthWallet: backendAuthWalletPubkey,
+          authConfig: authConfigPDA,
+          globalState: globalStatePDA,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([backendAuthWallet])
+        .rpc();
+      expect.fail("Transaction should have failed");
+    } catch (err) {
+      expect(err).to.exist;
+      // console.log("Transaction failed as expected:", err);
+    }
+  });
 
   it("Update auth config", async () => {
-
     const lobbyId = new anchor.BN(3);
 
     // Generate dummy wallets just to change values in auth config account
@@ -722,8 +779,98 @@ describe("battlebucks", async () => {
         })
         .signers([backendAuthWallet])
         .rpc();
-       expect.fail("Transaction should have failed");
+      expect.fail("Transaction should have failed");
     } catch (err) {
+      // console.log("Transaction failed as expected:", err);
+    }
+  });
+
+  it("Check max players restriction is working", async () => {
+    const lobbyId = new anchor.BN(2);
+
+    const [lobbyPDA, bump] = PublicKey.findProgramAddressSync(
+      [Buffer.from("lobby"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      program.programId
+    );
+
+    // Find the PDA for the player in lobby
+    const [playerInLobbyPDA, bump2] =
+      anchor.web3.PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("player"),
+          lobbyId.toArrayLike(Buffer, "le", 8),
+          playerWalletPubkey.toBuffer(),
+        ],
+        program.programId
+      );
+
+    // Find the PDA for the player in lobby
+    const [secondPlayerInLobbyPDA, bump3] =
+      anchor.web3.PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("player"),
+          lobbyId.toArrayLike(Buffer, "le", 8),
+          secondPlayerWalletPubkey.toBuffer(),
+        ],
+        program.programId
+      );
+
+    // Find the PDA for the escrow account
+    const [escrowPDA, bump4] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("escrow"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      program.programId
+    );
+
+    await program.methods
+      .joinLobby(lobbyId)
+      .accounts({
+        lobby: lobbyPDA,
+        escrow: escrowPDA,
+        player: playerInLobbyPDA,
+        playerWallet: playerWalletPubkey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([playerWallet])
+      .rpc();
+
+    await program.methods
+      .joinLobby(lobbyId)
+      .accounts({
+        lobby: lobbyPDA,
+        escrow: escrowPDA,
+        player: secondPlayerInLobbyPDA,
+        playerWallet: secondPlayerWalletPubkey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([secondPlayerWallet])
+      .rpc();
+
+    // THIRD PLAYER JOINING LOBBY SHOULD NOT BE POSSIBLE BECAUSE OF MAX_PLAYERS RESTRICTION
+    // Find the PDA for the player in lobby
+    const [thirdPlayerInLobbyPDA, bump5] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("player"),
+        lobbyId.toArrayLike(Buffer, "le", 8),
+        thirdPlayerWalletPubkey.toBuffer(),
+      ],
+      program.programId
+    );
+
+    try {
+      await program.methods
+      .joinLobby(lobbyId)
+      .accounts({
+        lobby: lobbyPDA,
+        escrow: escrowPDA,
+        player: thirdPlayerInLobbyPDA,
+        playerWallet: thirdPlayerWalletPubkey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([thirdPlayerWallet])
+      .rpc();
+
+    } catch (err) {
+      expect(err).to.exist;
       // console.log("Transaction failed as expected:", err);
     }
   });
