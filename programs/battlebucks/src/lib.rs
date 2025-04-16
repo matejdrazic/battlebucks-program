@@ -6,6 +6,11 @@ use anchor_lang::system_program::{transfer, Transfer};
 mod constants;
 use crate::constants::*;
 
+// Need to:
+//         max players restriction
+//         update id to string instead of u64
+//         security best practices
+
 
 declare_id!("215rECMPco6vSdPqnw5yS6F4FPsqpc3vWkJRkesUTRoP");
 
@@ -227,7 +232,14 @@ pub mod battlebucks {
     }
 
     // Function to update auth config
-    pub fn update_auth_config(_ctx: Context<UpdateAuthConfig>, _admin: Pubkey, _backend_auth_wallet: Pubkey, _house_wallet: Pubkey) -> Result<()> {
+    pub fn update_auth_config(ctx: Context<UpdateAuthConfig>, admin: Pubkey, backend_auth_wallet: Pubkey, house_wallet: Pubkey) -> Result<()> {
+
+        // Get the auth config account
+        let auth_config = &mut ctx.accounts.auth_config;
+        // Update the auth config account
+        auth_config.admin = admin;
+        auth_config.backend_auth_wallet = backend_auth_wallet;
+        auth_config.house_wallet = house_wallet;
 
         Ok(())
     }
@@ -429,7 +441,19 @@ pub struct UpdateRake <'info> {
 
 #[derive(Accounts)]
 #[instruction(admin: Pubkey)]
-pub struct UpdateAuthConfig /* <'info> */ {
+pub struct UpdateAuthConfig <'info> {
+    // The auth config account
+    #[account(
+        mut,
+        seeds = [AUTH_SEED],
+        bump,
+        constraint = auth_config.admin == admin.key(),
+    )]
+    pub auth_config: Account<'info, AuthConfig>,
+    // The update auth config user, must be admin wallet
+    pub admin: Signer<'info>,
+    // The system program
+    pub system_program: Program<'info, System>,
 }
 
 

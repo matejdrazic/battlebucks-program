@@ -585,6 +585,8 @@ describe("battlebucks", async () => {
     }
   });
 
+  it("Update rake percentage", async () => {});
+
   it("End game successfully", async () => {
     const lobbyId = new anchor.BN(1);
 
@@ -646,6 +648,83 @@ describe("battlebucks", async () => {
     );
   });
 
+  it("Can not update rake percentage after game ended", async () => {});
 
-  it("Update rake percentage", async () => {})
+
+  it("Update auth config", async () => {
+
+    const lobbyId = new anchor.BN(3);
+
+    // Generate dummy wallets just to change values in auth config account
+    const dummyHouseRakeWallet = anchor.web3.Keypair.generate();
+    const dummyHouseRakeWalletPubkey = dummyHouseRakeWallet.publicKey;
+    // const dummyHouseRakeWalletSecret = dummyHouseRakeWallet.secretKey;
+    const dummyBackendWallet = anchor.web3.Keypair.generate();
+    const dummyBackendWalletPubkey = dummyBackendWallet.publicKey;
+    // const dummyEndGameFundsRecipientSecret = dummyEndGameFundsRecipient.secretKey;
+
+    // Airdrop dummy backend wallet
+    await program.provider.connection.requestAirdrop(
+      dummyBackendWalletPubkey,
+      1000000000 // 1 SOL
+    );
+
+    // Find the PDA for the lobby
+    [lobbyPDA, bump] = PublicKey.findProgramAddressSync(
+      [Buffer.from("lobby"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      program.programId
+    );
+
+    // Find the PDA for the global state account
+    const [globalStatePDA, bump2] = PublicKey.findProgramAddressSync(
+      [Buffer.from("global_state")],
+      program.programId
+    );
+
+    const tx = await program.methods
+      .updateAuthConfig(
+        wallet,
+        dummyBackendWalletPubkey,
+        dummyHouseRakeWalletPubkey
+      )
+      .accounts({
+        authConfig: authConfigPDA,
+        admin: wallet,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+    console.log("Your transaction signature", tx);
+
+    // Fetch the auth config account data
+    const authConfigAccount = await program.account.authConfig.fetch(
+      authConfigPDA
+    );
+
+    // Expect new values in auth config account
+    expect(authConfigAccount.backendAuthWallet.toString()).to.equal(
+      dummyBackendWalletPubkey.toString()
+    );
+    expect(authConfigAccount.houseWallet.toString()).to.equal(
+      dummyHouseRakeWalletPubkey.toString()
+    );
+    expect(authConfigAccount.admin.toString()).to.equal(wallet.toString());
+
+    // Old backend auth wallet CAN NOT create a lobby
+    try {
+      await program.methods
+        .createLobby(lobbyId, new anchor.BN(1000000), 15)
+        .accounts({
+          lobby: lobbyPDA,
+          backendAuthWallet: backendAuthWalletPubkey,
+          globalState: globalStatePDA,
+          authConfig: authConfigPDA,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([backendAuthWallet])
+        .rpc();
+       expect.fail("Transaction should have failed");
+    } catch (err) {
+      // console.log("Transaction failed as expected:", err);
+    }
+  });
 });
