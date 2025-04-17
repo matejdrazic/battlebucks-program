@@ -83,7 +83,7 @@ This automatically:
 
 ---
 
-## Functions
+## 🛠️ Functions
 
 ### `initialize(admin: Pubkey, backend_auth_wallet: Pubkey, house_wallet: Pubkey, rake_percentage: u8)`
 
@@ -195,7 +195,7 @@ Updates the backend and house wallet settings.
 
 ---
 
-## Account Structure
+## 🧩 Account Structure (PDAs) - i.e. Storage model
 
 | Account           | Description                                          |
 |------------------|------------------------------------------------------|
