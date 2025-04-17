@@ -203,12 +203,39 @@ Interaction with program and functions can best be understood by checking out th
 
 ## 🧩 Account Structure (PDAs) - i.e. Storage model
 
-| Account           | Description                                          |
-|------------------|------------------------------------------------------|
-| `Lobby`          | Stores lobby ID, buy-in, rake %, game state, players |
-| `PlayerInLobby`  | Tracks player’s lobby participation                  |
-| `AuthConfig`     | Stores admin, backend, and house wallet pubkeys     |
-| `GlobalState`    | Stores default rake percentage                       |
-| `Escrow`         | Holds funds for each lobby                           |
+| Account           | Description                                                 |
+|------------------|--------------------------------------------------------------|
+| `Lobby`          | Stores lobby ID, buy-in, rake %, game state, players PDAs    |
+| `PlayerInLobby`  | Tracks player’s participation in a particular lobby          |
+| `AuthConfig`     | Stores admin, backend, and house wallet pubkeys              |
+| `GlobalState`    | Stores default rake percentage (meant to store global state) |
+| `Escrow`         | Holds funds for each lobby                                   |
 
 ---
+
+## 🔐 Security Model
+
+BattleBucks enforces strict access controls and state validations to ensure secure operation across game lobbies, fund movement, and configuration changes.
+
+### Role-Based Access
+
+- **Admin Wallet**
+  - Set during program initialization.
+  - Can update `admin`, `backend_auth_wallet`, and `house_wallet` using `update_auth_config` function.
+  - Has full authority over configuration.
+
+- **Backend Authorization Wallet**
+  - Set during initialization and stored in the `AuthConfig` account.
+  - Required signer for:
+    - `create_lobby`
+    - `start_game`
+    - `end_game`
+    - `update_rake`
+  - Prevents unauthorized lobby manipulation or fund distribution.
+
+### Player Access
+
+- Any wallet may call:
+  - `join_lobby`: Adds themselves to a lobby (must pay exact buy-in).
+  - `refund`: Only possible before the game starts.
+- Only the wallet that joined the lobby can invoke a `refund`.
