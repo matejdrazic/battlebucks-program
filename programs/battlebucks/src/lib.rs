@@ -12,7 +12,6 @@ pub const DEFAULT_MAX_PLAYERS: u8 = 50;
 pub const LOBBY_ID_STRING_MAX_LENGTH: usize = 64;
 
 // Need to:
-//         update id to string instead of u64
 //         security best practices
 //         ask client if they want pdas or player pubkeys in lobby vector
 
