@@ -9,7 +9,7 @@ use crate::constants::*;
 use crate::errors::*;
 
 pub const DEFAULT_MAX_PLAYERS: u8 = 50;
-// pub const LOBBY_ID_STRING_MAX_LENGTH: usize = 64;
+pub const LOBBY_ID_STRING_MAX_LENGTH: usize = 64;
 
 // Need to:
 //         update id to string instead of u64
@@ -41,10 +41,17 @@ pub mod battlebucks {
     }
 
     // Function to 'create' a new game lobby account
-    pub fn create_lobby(ctx: Context<CreateLobby>, lobby_id: u64, buy_in_amount: u64, max_players_in_lobby: Option<u8>) -> Result<()> {
+    pub fn create_lobby(ctx: Context<CreateLobby>, lobby_id: String, buy_in_amount: u64, max_players_in_lobby: Option<u8>) -> Result<()> {
         
         // Initialize the lobby account
         let lobby = &mut ctx.accounts.lobby; 
+
+        // Require that the lobby ID is shorter than the max length
+        require!(
+            lobby_id.len() <= LOBBY_ID_STRING_MAX_LENGTH,
+            CustomError::LobbyIdTooLong
+        );
+
         lobby.lobby_id = lobby_id;
         lobby.buy_in_amount = buy_in_amount;
         lobby.max_players_in_lobby = max_players_in_lobby;
@@ -60,7 +67,7 @@ pub mod battlebucks {
     }
 
     // Function invoked by player to join a specific lobby
-    pub fn join_lobby(ctx: Context<JoinLobby>, lobby_id: u64) -> Result<()> {
+    pub fn join_lobby(ctx: Context<JoinLobby>, lobby_id: String) -> Result<()> {
 
         // Get player PDA and lobby PDA
         let player = &mut ctx.accounts.player;
@@ -111,7 +118,7 @@ pub mod battlebucks {
     }
 
     // Function the player calls to leave lobby and get refund
-    pub fn refund(ctx: Context<LeaveLobby>, lobby_id: u64) -> Result<()> {
+    pub fn refund(ctx: Context<LeaveLobby>, lobby_id: String) -> Result<()> {
 
         // Get the lobby PDA and player in lobby PDA
         let lobby = &mut ctx.accounts.lobby;
@@ -128,9 +135,9 @@ pub mod battlebucks {
         let to_pubkey = ctx.accounts.player_wallet.to_account_info();
         let program_id = ctx.accounts.system_program.to_account_info();
 
-        let seed = lobby_id.to_le_bytes();
+        let seed = lobby_id.as_bytes();
         let bump_seed = ctx.bumps.escrow;
-        let signer_seeds: &[&[&[u8]]] = &[&[ESCROW_SEED, seed.as_ref(), &[bump_seed]]];
+        let signer_seeds: &[&[&[u8]]] = &[&[ESCROW_SEED, seed, &[bump_seed]]];
 
         let cpi_context = CpiContext::new(
             program_id,
@@ -147,7 +154,7 @@ pub mod battlebucks {
 
 
     // Function to start the game
-    pub fn start_game(ctx: Context<StartGame>, _lobby_id: u64) -> Result<()> {
+    pub fn start_game(ctx: Context<StartGame>, _lobby_id: String) -> Result<()> {
 
         // Get the lobby PDA
         let lobby = &mut ctx.accounts.lobby;
@@ -159,7 +166,7 @@ pub mod battlebucks {
     }
 
     // Function to end the game
-    pub fn end_game(ctx: Context<EndGame>, lobby_id: u64) -> Result<()> {
+    pub fn end_game(ctx: Context<EndGame>, lobby_id: String) -> Result<()> {
 
         // Ask client if they want to close the lobby account
 
@@ -189,9 +196,9 @@ pub mod battlebucks {
         let to_pubkey = house_wallet.to_account_info();
         let program_id = ctx.accounts.system_program.to_account_info();
 
-        let seed = lobby_id.to_le_bytes();
+        let seed = lobby_id.as_bytes();
         let bump_seed = ctx.bumps.escrow;
-        let signer_seeds: &[&[&[u8]]] = &[&[ESCROW_SEED, seed.as_ref(), &[bump_seed]]];
+        let signer_seeds: &[&[&[u8]]] = &[&[ESCROW_SEED, seed, &[bump_seed]]];
 
         let cpi_context = CpiContext::new(
             program_id,
@@ -229,7 +236,7 @@ pub mod battlebucks {
     }
 
     // Function to update rake
-    pub fn update_rake(ctx: Context<UpdateRake>, _lobby_id: u64, new_rake_percentage: u8) -> Result<()> {
+    pub fn update_rake(ctx: Context<UpdateRake>, _lobby_id: String, new_rake_percentage: u8) -> Result<()> {
 
         // Get the lobby PDA
         let lobby = &mut ctx.accounts.lobby;
@@ -283,9 +290,9 @@ pub struct Initialize<'info> {
 
 
 #[derive(Accounts)]
-#[instruction(lobby_id: u64, buy_in_amount: u64, max_players_in_lobby: Option<u8>)]
+#[instruction(lobby_id: String, buy_in_amount: u64, max_players_in_lobby: Option<u8>)]
 pub struct CreateLobby<'info> { // CHECK: Hardcoded 10 as max players (stress test later)
-    #[account(init, payer = backend_auth_wallet, space = 8 + 8 + 8 + 2 + 1 + 1 + 1 + 4 + 32 * max_players_in_lobby.unwrap_or(DEFAULT_MAX_PLAYERS) as usize, seeds = [LOBBY_SEED, lobby_id.to_le_bytes().as_ref()], bump)]
+    #[account(init, payer = backend_auth_wallet, space = 8 + 4 + LOBBY_ID_STRING_MAX_LENGTH + 8 + 2 + 1 + 1 + 1 + 4 + 32 * max_players_in_lobby.unwrap_or(DEFAULT_MAX_PLAYERS) as usize, seeds = [LOBBY_SEED, lobby_id.as_bytes()], bump)]
     pub lobby: Account<'info, Lobby>,
     // The wallet who is responsible for creating the lobby
     #[account(mut)]
@@ -309,18 +316,18 @@ pub struct CreateLobby<'info> { // CHECK: Hardcoded 10 as max players (stress te
 
 
 #[derive(Accounts)]
-#[instruction(lobby_id: u64)]
+#[instruction(lobby_id: String)]
 pub struct JoinLobby<'info> {
     // Initializes the player in lobby PDA
-    #[account(init, payer = player_wallet, space = 8 + 8 + 32 + 32, seeds = [PLAYER_SEED, lobby_id.to_le_bytes().as_ref(), player_wallet.key().as_ref()], bump)]
+    #[account(init, payer = player_wallet, space = 8 + 4 + LOBBY_ID_STRING_MAX_LENGTH + 32 + 32, seeds = [PLAYER_SEED, lobby_id.as_bytes(), player_wallet.key().as_ref()], bump)]
     pub player: Account<'info, PlayerInLobby>,
     // The escrow account that will hold the buy-in amount
-    #[account(mut, seeds = [ESCROW_SEED, lobby_id.to_le_bytes().as_ref()], bump)]
+    #[account(mut, seeds = [ESCROW_SEED, lobby_id.as_bytes()], bump)]
     pub escrow: SystemAccount<'info>,
     // Player wallet who is joining the lobby
     #[account(
         mut,
-        seeds = [LOBBY_SEED, lobby_id.to_le_bytes().as_ref()],
+        seeds = [LOBBY_SEED, lobby_id.as_bytes()],
         bump,
         // constraint = lobby.current_players_in_lobby < lobby.max_players_in_lobby.unwrap_or(0)
         constraint = lobby.game_state == GameState::NotStarted,
@@ -334,13 +341,13 @@ pub struct JoinLobby<'info> {
 
 
 #[derive(Accounts)]
-#[instruction(lobby_id: u64)]
+#[instruction(lobby_id: String)]
 pub struct LeaveLobby <'info> {
     // The player PDA that will be closed
     #[account(
         mut, 
         close = player_wallet, 
-        seeds = [PLAYER_SEED, lobby_id.to_le_bytes().as_ref(), player_wallet.key().as_ref()], 
+        seeds = [PLAYER_SEED, lobby_id.as_bytes(), player_wallet.key().as_ref()], 
         bump,
         constraint = player.player_pubkey == player_wallet.key(),
     )]
@@ -348,13 +355,13 @@ pub struct LeaveLobby <'info> {
     // The lobby PDA
     #[account(
         mut,
-        seeds = [LOBBY_SEED, lobby_id.to_le_bytes().as_ref()],
+        seeds = [LOBBY_SEED, lobby_id.as_bytes()],
         bump,
         constraint = lobby.game_state == GameState::NotStarted,
     )]
     pub lobby: Account<'info, Lobby>,
     // The escrow account that will be closed
-    #[account(mut, seeds = [ESCROW_SEED, lobby_id.to_le_bytes().as_ref()], bump)]
+    #[account(mut, seeds = [ESCROW_SEED, lobby_id.as_bytes()], bump)]
     pub escrow: SystemAccount<'info>, /// CHECK: This is the correct escrow account for lobby
     // The system program
     pub system_program: Program<'info, System>,
@@ -364,12 +371,12 @@ pub struct LeaveLobby <'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(lobby_id: u64)]
+#[instruction(lobby_id: String)]
 pub struct StartGame<'info> {
     // The lobby PDA
     #[account(
         mut,
-        seeds = [LOBBY_SEED, lobby_id.to_le_bytes().as_ref()],
+        seeds = [LOBBY_SEED, lobby_id.as_bytes()],
         bump,
         constraint = lobby.game_state == GameState::NotStarted,
     )]
@@ -389,12 +396,12 @@ pub struct StartGame<'info> {
 
 
 #[derive(Accounts)]
-#[instruction(lobby_id: u64)]
+#[instruction(lobby_id: String)]
 pub struct EndGame<'info> {
     // The lobby PDA
     #[account(
         mut,
-        seeds = [LOBBY_SEED, lobby_id.to_le_bytes().as_ref()],
+        seeds = [LOBBY_SEED, lobby_id.as_bytes()],
         bump,
         constraint = lobby.game_state == GameState::InProgress,
     )]
@@ -402,7 +409,7 @@ pub struct EndGame<'info> {
     // Escrow account that will be closed
     #[account(
         mut, 
-        seeds = [ESCROW_SEED, lobby_id.to_le_bytes().as_ref()], 
+        seeds = [ESCROW_SEED, lobby_id.as_bytes()], 
         bump,
     )]
     pub escrow: SystemAccount<'info>, /// CHECK: This is the correct escrow account for lobby
@@ -427,12 +434,12 @@ pub struct EndGame<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(lobby_id: u64, new_rake_percentage: u8)]
+#[instruction(lobby_id: String, new_rake_percentage: u8)]
 pub struct UpdateRake <'info> {
     // The lobby PDA
     #[account(
         mut,
-        seeds = [LOBBY_SEED, lobby_id.to_le_bytes().as_ref()],
+        seeds = [LOBBY_SEED, lobby_id.as_bytes()],
         bump,
         constraint = lobby.game_state != GameState::Ended,
     )]
@@ -480,7 +487,7 @@ pub struct UpdateAuthConfig <'info> {
 /// PDAs
 #[account]
 pub struct Lobby {
-    pub lobby_id: u64,
+    pub lobby_id: String,
     pub buy_in_amount: u64,
     pub rake_percentage: u8,
     pub max_players_in_lobby: Option<u8>, // optional constraint
@@ -491,7 +498,7 @@ pub struct Lobby {
 
 #[account]
 pub struct PlayerInLobby {
-    pub lobby_id: u64,
+    pub lobby_id: String,
     pub lobby_pda: Pubkey, // PDA of the lobby the player is in
     pub player_pubkey: Pubkey
 }

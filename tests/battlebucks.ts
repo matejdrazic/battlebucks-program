@@ -111,13 +111,13 @@ describe("battlebucks", async () => {
   });
 
   it("Create lobby", async () => {
-    const lobbyId = new anchor.BN(1);
+    const lobbyId = "1";
     const buyInAmount = new anchor.BN(100000000); // 0.1 SOL
     const maxPlayers = 20;
 
     // Find the PDA for the lobby
     [lobbyPDA, bump] = PublicKey.findProgramAddressSync(
-      [Buffer.from("lobby"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      [Buffer.from("lobby"), Buffer.from(lobbyId)],
       program.programId
     );
 
@@ -128,7 +128,7 @@ describe("battlebucks", async () => {
     );
 
     const tx = await program.methods
-      .createLobby(lobbyId, buyInAmount, maxPlayers)
+      .createLobby(lobbyId.toString(), buyInAmount, maxPlayers)
       .accounts({
         lobby: lobbyPDA,
         backendAuthWallet: backendAuthWalletPubkey,
@@ -148,13 +148,13 @@ describe("battlebucks", async () => {
   });
 
   it("Create another lobby", async () => {
-    const lobbyId = new anchor.BN(2);
+    const lobbyId = "2";
     const buyInAmount = new anchor.BN(1000000); // 0.001 SOL
     const maxPlayers = 2;
 
     // Find the PDA for the lobby
     const [lobbyPDA, bump] = PublicKey.findProgramAddressSync(
-      [Buffer.from("lobby"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      [Buffer.from("lobby"), Buffer.from(lobbyId)],
       program.programId
     );
 
@@ -184,13 +184,13 @@ describe("battlebucks", async () => {
   });
 
   it("Non authorized wallet can not create lobby", async () => {
-    const lobbyId = new anchor.BN(2);
+    const lobbyId = "2";
     const buyInAmount = new anchor.BN(1000000);
     const maxPlayers = 20;
 
     // Verify the backend auth wallet is set in the program state
     const [lobbyPDA, bump] = PublicKey.findProgramAddressSync(
-      [Buffer.from("lobby"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      [Buffer.from("lobby"), Buffer.from(lobbyId)],
       program.programId
     );
 
@@ -218,14 +218,14 @@ describe("battlebucks", async () => {
   });
 
   it("Player joins lobby", async () => {
-    const lobbyId = new anchor.BN(1);
+    const lobbyId = "1";
 
     // Find the PDA for the player in lobby
     const [playerInLobbyPDA, bump] =
       anchor.web3.PublicKey.findProgramAddressSync(
         [
           Buffer.from("player"),
-          lobbyId.toArrayLike(Buffer, "le", 8),
+          Buffer.from(lobbyId),
           playerWalletPubkey.toBuffer(),
         ],
         program.programId
@@ -233,7 +233,7 @@ describe("battlebucks", async () => {
 
     // Find the PDA for the escrow account
     const [escrowPDA, bump2] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("escrow"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      [Buffer.from("escrow"), Buffer.from(lobbyId)],
       program.programId
     );
 
@@ -272,14 +272,14 @@ describe("battlebucks", async () => {
   });
 
   it("Same player can not join same lobby", async () => {
-    const lobbyId = new anchor.BN(1);
+    const lobbyId = "1";
 
     // Find the PDA for the player in lobby
     const [playerInLobbyPDA, bump] =
       anchor.web3.PublicKey.findProgramAddressSync(
         [
           Buffer.from("player"),
-          lobbyId.toArrayLike(Buffer, "le", 8),
+          Buffer.from(lobbyId),
           playerWalletPubkey.toBuffer(),
         ],
         program.programId
@@ -287,7 +287,7 @@ describe("battlebucks", async () => {
 
     // Find the PDA for the escrow account
     const [escrowPDA, bump2] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("escrow"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      [Buffer.from("escrow"), Buffer.from(lobbyId)],
       program.programId
     );
 
@@ -311,14 +311,14 @@ describe("battlebucks", async () => {
   });
 
   it("Another player joins lobby", async () => {
-    const lobbyId = new anchor.BN(1);
+    const lobbyId = "1";
 
     // Find the PDA for the player in lobby
     const [secondPlayerInLobbyPDA, bump] =
       anchor.web3.PublicKey.findProgramAddressSync(
         [
           Buffer.from("player"),
-          lobbyId.toArrayLike(Buffer, "le", 8),
+          Buffer.from(lobbyId),
           secondPlayerWalletPubkey.toBuffer(),
         ],
         program.programId
@@ -326,7 +326,7 @@ describe("battlebucks", async () => {
 
     // Find the PDA for the escrow account
     const [escrowPDA, bump2] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("escrow"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      [Buffer.from("escrow"), Buffer.from(lobbyId)],
       program.programId
     );
 
@@ -366,7 +366,7 @@ describe("battlebucks", async () => {
   });
 
   it("Player leaves lobby", async () => {
-    const lobbyId = new anchor.BN(1);
+    const lobbyId = "1";
 
     const userBalanceBeforeClosingAccount =
       await program.provider.connection.getBalance(secondPlayerWalletPubkey);
@@ -376,7 +376,7 @@ describe("battlebucks", async () => {
       anchor.web3.PublicKey.findProgramAddressSync(
         [
           Buffer.from("player"),
-          lobbyId.toArrayLike(Buffer, "le", 8),
+          Buffer.from(lobbyId),
           secondPlayerWalletPubkey.toBuffer(),
         ],
         program.programId
@@ -384,7 +384,7 @@ describe("battlebucks", async () => {
 
     // Find the PDA for the escrow account
     const [escrowPDA, bump2] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("escrow"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      [Buffer.from("escrow"), Buffer.from(lobbyId)],
       program.programId
     );
 
@@ -437,14 +437,14 @@ describe("battlebucks", async () => {
   });
 
   it("Player can re-join lobby after leaving", async () => {
-    const lobbyId = new anchor.BN(1);
+    const lobbyId = "1";
 
     // Find the PDA for the player in lobby
     const [secondPlayerInLobbyPDA, bump] =
       anchor.web3.PublicKey.findProgramAddressSync(
         [
           Buffer.from("player"),
-          lobbyId.toArrayLike(Buffer, "le", 8),
+          Buffer.from(lobbyId),
           secondPlayerWalletPubkey.toBuffer(),
         ],
         program.programId
@@ -452,7 +452,7 @@ describe("battlebucks", async () => {
 
     // Find the PDA for the escrow account
     const [escrowPDA, bump2] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("escrow"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      [Buffer.from("escrow"), Buffer.from(lobbyId)],
       program.programId
     );
 
@@ -485,7 +485,7 @@ describe("battlebucks", async () => {
   });
 
   it("Start game successfully", async () => {
-    const lobbyId = new anchor.BN(1);
+    const lobbyId = "1";
 
     const tx = await program.methods
       .startGame(lobbyId)
@@ -508,14 +508,14 @@ describe("battlebucks", async () => {
   });
 
   it("Player can not join lobby if game already started", async () => {
-    const lobbyId = new anchor.BN(1);
+    const lobbyId = "1";
 
     // Find the PDA for the player in lobby
     const [thirdPlayerInLobbyPDA, bump] =
       anchor.web3.PublicKey.findProgramAddressSync(
         [
           Buffer.from("player"),
-          lobbyId.toArrayLike(Buffer, "le", 8),
+          Buffer.from(lobbyId),
           secondPlayerWalletPubkey.toBuffer(),
         ],
         program.programId
@@ -523,7 +523,7 @@ describe("battlebucks", async () => {
 
     // Find the PDA for the escrow account
     const [escrowPDA, bump2] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("escrow"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      [Buffer.from("escrow"), Buffer.from(lobbyId)],
       program.programId
     );
 
@@ -547,14 +547,14 @@ describe("battlebucks", async () => {
   });
 
   it("Player can not leave lobby if game already started", async () => {
-    const lobbyId = new anchor.BN(1);
+    const lobbyId = "1";
 
     // Find the PDA for the player in lobby
     const [secondPlayerInLobbyPDA, bump] =
       anchor.web3.PublicKey.findProgramAddressSync(
         [
           Buffer.from("player"),
-          lobbyId.toArrayLike(Buffer, "le", 8),
+          Buffer.from(lobbyId),
           secondPlayerWalletPubkey.toBuffer(),
         ],
         program.programId
@@ -562,7 +562,7 @@ describe("battlebucks", async () => {
 
     // Find the PDA for the escrow account
     const [escrowPDA, bump2] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("escrow"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      [Buffer.from("escrow"), Buffer.from(lobbyId)],
       program.programId
     );
 
@@ -586,7 +586,7 @@ describe("battlebucks", async () => {
   });
 
   it("Update rake percentage", async () => {
-    const lobbyId = new anchor.BN(1);
+    const lobbyId = "1";
 
     const rakePercentage = 10; // 10% rake
 
@@ -619,7 +619,7 @@ describe("battlebucks", async () => {
   });
 
   it("End game successfully", async () => {
-    const lobbyId = new anchor.BN(1);
+    const lobbyId = "1";
 
     // Get balance of the rake wallet before ending the game
     const houseRakeBalanceBefore = await program.provider.connection.getBalance(
@@ -632,7 +632,7 @@ describe("battlebucks", async () => {
 
     // Find the PDA for the escrow account
     const [escrowPDA, bump2] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("escrow"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      [Buffer.from("escrow"), Buffer.from(lobbyId)],
       program.programId
     );
 
@@ -680,7 +680,7 @@ describe("battlebucks", async () => {
   });
 
   it("Can not update rake percentage after game ended", async () => {
-    const lobbyId = new anchor.BN(1);
+    const lobbyId = "1";
 
     const rakePercentage = 15; // 15% rake
 
@@ -710,7 +710,7 @@ describe("battlebucks", async () => {
   });
 
   it("Update auth config", async () => {
-    const lobbyId = new anchor.BN(3);
+    const lobbyId = "3";
 
     // Generate dummy wallets just to change values in auth config account
     const dummyHouseRakeWallet = anchor.web3.Keypair.generate();
@@ -728,7 +728,7 @@ describe("battlebucks", async () => {
 
     // Find the PDA for the lobby
     [lobbyPDA, bump] = PublicKey.findProgramAddressSync(
-      [Buffer.from("lobby"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      [Buffer.from("lobby"), Buffer.from(lobbyId)],
       program.programId
     );
 
@@ -786,10 +786,10 @@ describe("battlebucks", async () => {
   });
 
   it("Check max players restriction is working", async () => {
-    const lobbyId = new anchor.BN(2);
+    const lobbyId = "2";
 
     const [lobbyPDA, bump] = PublicKey.findProgramAddressSync(
-      [Buffer.from("lobby"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      [Buffer.from("lobby"), Buffer.from(lobbyId)],
       program.programId
     );
 
@@ -798,7 +798,7 @@ describe("battlebucks", async () => {
       anchor.web3.PublicKey.findProgramAddressSync(
         [
           Buffer.from("player"),
-          lobbyId.toArrayLike(Buffer, "le", 8),
+          Buffer.from(lobbyId),
           playerWalletPubkey.toBuffer(),
         ],
         program.programId
@@ -809,7 +809,7 @@ describe("battlebucks", async () => {
       anchor.web3.PublicKey.findProgramAddressSync(
         [
           Buffer.from("player"),
-          lobbyId.toArrayLike(Buffer, "le", 8),
+          Buffer.from(lobbyId),
           secondPlayerWalletPubkey.toBuffer(),
         ],
         program.programId
@@ -817,7 +817,7 @@ describe("battlebucks", async () => {
 
     // Find the PDA for the escrow account
     const [escrowPDA, bump4] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("escrow"), lobbyId.toArrayLike(Buffer, "le", 8)],
+      [Buffer.from("escrow"), Buffer.from(lobbyId)],
       program.programId
     );
 
@@ -850,7 +850,7 @@ describe("battlebucks", async () => {
     const [thirdPlayerInLobbyPDA, bump5] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("player"),
-        lobbyId.toArrayLike(Buffer, "le", 8),
+        Buffer.from(lobbyId),
         thirdPlayerWalletPubkey.toBuffer(),
       ],
       program.programId
