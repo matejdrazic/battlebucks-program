@@ -195,6 +195,12 @@ Updates the backend and house wallet settings.
 
 ---
 
+## 🔄 Interactions
+
+Interaction with program and functions can best be understood by checking out the tests file: `tests/battlebucks.ts`
+
+---
+
 ## 🧩 Account Structure (PDAs) - i.e. Storage model
 
 | Account           | Description                                          |
@@ -203,6 +209,6 @@ Updates the backend and house wallet settings.
 | `PlayerInLobby`  | Tracks player’s lobby participation                  |
 | `AuthConfig`     | Stores admin, backend, and house wallet pubkeys     |
 | `GlobalState`    | Stores default rake percentage                       |
-| `Escrow` (PDA)   | Holds funds for each lobby                           |
+| `Escrow`         | Holds funds for each lobby                           |
 
 ---
