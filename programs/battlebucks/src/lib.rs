@@ -167,8 +167,6 @@ pub mod battlebucks {
     // Function to end the game
     pub fn end_game(ctx: Context<EndGame>, lobby_id: String) -> Result<()> {
 
-        // Ask client if they want to close the lobby account
-
         // Get the lobby PDA
         let lobby = &mut ctx.accounts.lobby;
         // Get the escrow account
