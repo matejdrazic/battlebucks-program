@@ -515,7 +515,7 @@ pub struct GlobalState {
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
 pub enum GameState {
-    NotStarted, // Still not sure if this is default GameState
+    NotStarted,
     InProgress,
     Ended,
 }
