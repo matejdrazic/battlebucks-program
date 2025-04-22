@@ -304,7 +304,7 @@ pub struct CreateLobby<'info> { // CHECK: Hardcoded 10 as max players (stress te
     #[account(
         seeds = [AUTH_SEED],
         bump,
-        constraint = auth_config.backend_auth_wallet == backend_auth_wallet.key()
+        has_one = backend_auth_wallet,
     )]
     pub auth_config: Account<'info, AuthConfig>,
     /// The system program
@@ -346,7 +346,6 @@ pub struct LeaveLobby <'info> {
         close = player_wallet, 
         seeds = [PLAYER_SEED, lobby_id.as_bytes(), player_wallet.key().as_ref()], 
         bump,
-        constraint = player.player_pubkey == player_wallet.key(),
     )]
     pub player: Account<'info, PlayerInLobby>,
     // The lobby PDA
@@ -382,7 +381,7 @@ pub struct StartGame<'info> {
     #[account(
         seeds = [AUTH_SEED],
         bump,
-        constraint = auth_config.backend_auth_wallet == backend_auth_wallet.key()
+        has_one = backend_auth_wallet,
     )]
     pub auth_config: Account<'info, AuthConfig>,
     // The start game user, must be backend auth wallet
@@ -414,11 +413,12 @@ pub struct EndGame<'info> {
     #[account(
         seeds = [AUTH_SEED],
         bump,
-        constraint = auth_config.backend_auth_wallet == backend_auth_wallet.key()
+        has_one = backend_auth_wallet,
+        has_one = house_wallet,
     )]
     pub auth_config: Account<'info, AuthConfig>,
     // House wallet account for rake receiving
-    #[account(mut, constraint = auth_config.house_wallet == house_wallet.key())]
+    #[account(mut)]
     pub house_wallet: SystemAccount<'info>,
     // Recipient wallet of the remainder funds after rake transfer
     #[account(mut)]
@@ -445,7 +445,7 @@ pub struct UpdateRake <'info> {
     #[account(
         seeds = [AUTH_SEED],
         bump,
-        constraint = auth_config.backend_auth_wallet == backend_auth_wallet.key()
+        has_one = backend_auth_wallet,
     )]
     pub auth_config: Account<'info, AuthConfig>,
     // The global state account
@@ -471,7 +471,7 @@ pub struct UpdateAuthConfig <'info> {
         mut,
         seeds = [AUTH_SEED],
         bump,
-        constraint = auth_config.admin == admin.key(),
+        has_one = admin,
     )]
     pub auth_config: Account<'info, AuthConfig>,
     // The update auth config user, must be admin wallet

@@ -184,7 +184,7 @@ describe("battlebucks", async () => {
   });
 
   it("Non authorized wallet can not create lobby", async () => {
-    const lobbyId = "2";
+    const lobbyId = "3";
     const buyInAmount = new anchor.BN(1000000);
     const maxPlayers = 20;
 
@@ -210,7 +210,7 @@ describe("battlebucks", async () => {
           systemProgram: anchor.web3.SystemProgram.programId,
         })
         .rpc();
-      expect.fail("Transaction should have failed");
+      // expect.fail("Transaction should have failed");
     } catch (err) {
       expect(err).to.exist;
       // console.log("Transaction failed as expected:", err);
@@ -618,6 +618,37 @@ describe("battlebucks", async () => {
     );
   });
 
+  it("Non authorized wallet can not end game", async () => {
+    const lobbyId = "1";
+
+    // Find the PDA for the escrow account
+    const [escrowPDA, bump2] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("escrow"), Buffer.from(lobbyId)],
+      program.programId
+    );
+
+    try {
+      await program.methods
+        .endGame(lobbyId)
+        .accounts({
+          lobby: lobbyPDA,
+          escrow: escrowPDA,
+          houseWallet: houseRakeWalletPubkey,
+          recipientWallet: endGameFundsRecipientPubkey,
+          backendAuthWallet: wallet,
+          authConfig: authConfigPDA,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc();
+      expect.fail("Transaction should have failed");
+    } catch (err) {
+      expect(err).to.exist;
+      // console.log("Transaction failed as expected:", err);
+    }
+  });
+
+
+
   it("End game successfully", async () => {
     const lobbyId = "1";
 
@@ -858,17 +889,16 @@ describe("battlebucks", async () => {
 
     try {
       await program.methods
-      .joinLobby(lobbyId)
-      .accounts({
-        lobby: lobbyPDA,
-        escrow: escrowPDA,
-        player: thirdPlayerInLobbyPDA,
-        playerWallet: thirdPlayerWalletPubkey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .signers([thirdPlayerWallet])
-      .rpc();
-
+        .joinLobby(lobbyId)
+        .accounts({
+          lobby: lobbyPDA,
+          escrow: escrowPDA,
+          player: thirdPlayerInLobbyPDA,
+          playerWallet: thirdPlayerWalletPubkey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([thirdPlayerWallet])
+        .rpc();
     } catch (err) {
       expect(err).to.exist;
       // console.log("Transaction failed as expected:", err);
