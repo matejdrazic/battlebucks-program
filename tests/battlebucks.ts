@@ -260,11 +260,6 @@ describe("battlebucks", async () => {
 
     // console.log(lobbyAccount)
 
-    // Assert correct auth wallet was saved in AuthConfig account
-    expect(lobbyAccount.playerPdas[0].toString()).to.equal(
-      playerInLobbyPDA.toString()
-    );
-
     // Assert escrow account is has correct balance
     expect(escrowBalance.toString()).to.equal(
       lobbyAccount.buyInAmount.toString()
@@ -352,13 +347,6 @@ describe("battlebucks", async () => {
       escrowPDA
     );
 
-    // Assert correct auth wallet was saved in AuthConfig account
-    expect(lobbyAccount.playerPdas[1].toString()).to.equal(
-      secondPlayerInLobbyPDA.toString()
-    );
-
-    expect(lobbyAccount.playerPdas.length).to.equal(2);
-
     // Assert escrow account has correct balance
     expect(escrowBalance.toString()).to.equal(
       lobbyAccount.buyInAmount.mul(new anchor.BN(2)).toString()
@@ -422,9 +410,6 @@ describe("battlebucks", async () => {
       Number(lobbyAccount.buyInAmount) + userBalanceBeforeClosingAccount
     );
 
-    // Expect the player PDAs in lobby array to be 1 less
-    expect(lobbyAccount.playerPdas.length).to.equal(1);
-
     console.log(lobbyAccount);
 
     const escrowBalance = await program.provider.connection.getBalance(
@@ -468,17 +453,6 @@ describe("battlebucks", async () => {
       .signers([secondPlayerWallet])
       .rpc();
     console.log("Your transaction signature", tx);
-
-    // Fetch the auth config account data
-    const lobbyAccount = await program.account.lobby.fetch(lobbyPDA);
-
-    // Assert correct auth wallet was saved in AuthConfig account
-    expect(lobbyAccount.playerPdas[1].toString()).to.equal(
-      secondPlayerInLobbyPDA.toString()
-    );
-
-    // Expect the player PDAs to be 2 again
-    expect(lobbyAccount.playerPdas.length).to.equal(2);
 
     // This should now work
     await program.account.playerInLobby.fetch(secondPlayerInLobbyPDA);

@@ -8,7 +8,6 @@ mod errors;
 use crate::constants::*;
 use crate::errors::*;
 
-pub const DEFAULT_MAX_PLAYERS: u8 = 50;
 pub const LOBBY_ID_STRING_MAX_LENGTH: usize = 64;
 
 declare_id!("85amFNfuER5bEcya8UUMKhvjEVGVjYfuZDEaJy8Ymq9Q");
@@ -51,7 +50,6 @@ pub mod battlebucks {
         lobby.max_players_in_lobby = max_players_in_lobby;
         lobby.current_players_in_lobby = 0;
         lobby.game_state = GameState::NotStarted; // Set initial game state
-        lobby.player_pdas = Vec::new(); // Initialize empty vector for player PDAs
         
         // Fetch rake percentage from global state and save in lobby account
         let global_state = &ctx.accounts.global_state;
@@ -88,8 +86,6 @@ pub mod battlebucks {
         ///// LOBBY PDA LOGIC
         // Increment the current players in lobby
         lobby.current_players_in_lobby += 1;
-        // Add the player PDA to the lobby's player PDAs
-        lobby.player_pdas.push(player.key()); // CHECK: Maybe this vector is not necessary in storage
 
 
         //Transfer the buy-in amount from the player to the lobby escrow account (PDA)
@@ -116,12 +112,9 @@ pub mod battlebucks {
 
         // Get the lobby PDA and player in lobby PDA
         let lobby = &mut ctx.accounts.lobby;
-        let player = &mut ctx.accounts.player;
 
         // Decrement the current players in lobby
         lobby.current_players_in_lobby -= 1;
-        // Remove the player PDA from the lobby's player PDAs
-        lobby.player_pdas.retain(|&x| x != player.key()); // CHECK: Maybe this vector is not necessary in storage
 
 
         // Transfer funds from escrow to player wallet
@@ -284,7 +277,7 @@ pub struct Initialize<'info> {
 #[derive(Accounts)]
 #[instruction(lobby_id: String, buy_in_amount: u64, max_players_in_lobby: Option<u8>)]
 pub struct CreateLobby<'info> { // CHECK: Hardcoded 10 as max players (stress test later)
-    #[account(init, payer = backend_auth_wallet, space = 8 + 4 + LOBBY_ID_STRING_MAX_LENGTH + 8 + 2 + 1 + 1 + 1 + 4 + 32 * max_players_in_lobby.unwrap_or(DEFAULT_MAX_PLAYERS) as usize, seeds = [LOBBY_SEED, lobby_id.as_bytes()], bump)]
+    #[account(init, payer = backend_auth_wallet, space = 8 + 4 + LOBBY_ID_STRING_MAX_LENGTH + 8 + 2 + 1 + 1 + 1 + 4, seeds = [LOBBY_SEED, lobby_id.as_bytes()], bump)]
     pub lobby: Account<'info, Lobby>,
     // The wallet who is responsible for creating the lobby
     #[account(mut)]
