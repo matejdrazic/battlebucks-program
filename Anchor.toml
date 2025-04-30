@@ -5,7 +5,7 @@ seeds = false
 skip-lint = false
 
 [programs.localnet]
-battlebucks = "85amFNfuER5bEcya8UUMKhvjEVGVjYfuZDEaJy8Ymq9Q"
+battlebucks = "86KjaJP57GJPzh9WBLkLvXtY7ah1DtpNbbEY5AjNhwVW"
 
 [registry]
 url = "https://api.apr.dev"

@@ -11,7 +11,7 @@ use crate::errors::*;
 pub const DEFAULT_MAX_PLAYERS: u8 = 50;
 pub const LOBBY_ID_STRING_MAX_LENGTH: usize = 64;
 
-declare_id!("85amFNfuER5bEcya8UUMKhvjEVGVjYfuZDEaJy8Ymq9Q");
+declare_id!("86KjaJP57GJPzh9WBLkLvXtY7ah1DtpNbbEY5AjNhwVW");
 
 
 #[program]
