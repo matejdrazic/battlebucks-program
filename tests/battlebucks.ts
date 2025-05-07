@@ -492,8 +492,7 @@ describe("battlebucks", async () => {
       .accounts({
         lobby: lobbyPDA,
         backendAuthWallet: backendAuthWalletPubkey,
-        authConfig: authConfigPDA,
-        systemProgram: anchor.web3.SystemProgram.programId,
+        authConfig: authConfigPDA
       })
       .signers([backendAuthWallet])
       .rpc();
@@ -602,8 +601,7 @@ describe("battlebucks", async () => {
         lobby: lobbyPDA,
         backendAuthWallet: backendAuthWalletPubkey,
         authConfig: authConfigPDA,
-        globalState: globalStatePDA,
-        systemProgram: anchor.web3.SystemProgram.programId,
+        globalState: globalStatePDA
       })
       .signers([backendAuthWallet])
       .rpc();
@@ -728,8 +726,7 @@ describe("battlebucks", async () => {
           lobby: lobbyPDA,
           backendAuthWallet: backendAuthWalletPubkey,
           authConfig: authConfigPDA,
-          globalState: globalStatePDA,
-          systemProgram: anchor.web3.SystemProgram.programId,
+          globalState: globalStatePDA
         })
         .signers([backendAuthWallet])
         .rpc();
@@ -777,8 +774,7 @@ describe("battlebucks", async () => {
       )
       .accounts({
         authConfig: authConfigPDA,
-        admin: wallet,
-        systemProgram: anchor.web3.SystemProgram.programId,
+        admin: wallet
       })
       .rpc();
     console.log("Your transaction signature", tx);

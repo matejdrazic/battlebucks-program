@@ -283,7 +283,7 @@ pub struct Initialize<'info> {
 
 #[derive(Accounts)]
 #[instruction(lobby_id: String, buy_in_amount: u64, max_players_in_lobby: Option<u8>)]
-pub struct CreateLobby<'info> { // CHECK: Hardcoded 10 as max players (stress test later)
+pub struct CreateLobby<'info> {
     #[account(init, payer = backend_auth_wallet, space = 8 + 4 + LOBBY_ID_STRING_MAX_LENGTH + 8 + 2 + 1 + 1 + 1 + 4 + 32 * max_players_in_lobby.unwrap_or(DEFAULT_MAX_PLAYERS) as usize, seeds = [LOBBY_SEED, lobby_id.as_bytes()], bump)]
     pub lobby: Account<'info, Lobby>,
     // The wallet who is responsible for creating the lobby
@@ -381,8 +381,6 @@ pub struct StartGame<'info> {
     pub auth_config: Account<'info, AuthConfig>,
     // The start game user, must be backend auth wallet
     pub backend_auth_wallet: Signer<'info>,
-    // The system program
-    pub system_program: Program<'info, System>,
 }
 
 
@@ -453,8 +451,6 @@ pub struct UpdateRake <'info> {
     pub global_state: Account<'info, GlobalState>,
     // The update rake user, must be backend auth wallet
     pub backend_auth_wallet: Signer<'info>,
-    // The system program
-    pub system_program: Program<'info, System>,
 }
 
 
@@ -471,8 +467,6 @@ pub struct UpdateAuthConfig <'info> {
     pub auth_config: Account<'info, AuthConfig>,
     // The update auth config user, must be admin wallet
     pub admin: Signer<'info>,
-    // The system program
-    pub system_program: Program<'info, System>,
 }
 
 

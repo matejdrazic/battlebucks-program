@@ -149,7 +149,6 @@ Marks a lobby as "in progress". Prevents further joins or refunds.
 - `lobby`: Must be in `NotStarted` state  
 - `auth_config`: Verifies backend auth wallet  
 - `backend_auth_wallet`: Must match `auth_config.backend_auth_wallet`  
-- `system_program`: Required
 
 ---
 
@@ -179,7 +178,6 @@ Updates the rake percentage for a lobby before the game ends.
 - `auth_config`: Verifies backend auth  
 - `global_state`: Stores global rake  
 - `backend_auth_wallet`: Must match `auth_config.backend_auth_wallet`  
-- `system_program`: Required
 
 ---
 
@@ -191,7 +189,6 @@ Updates the backend and house wallet settings.
 
 - `auth_config`: Must match `admin` for mutation  
 - `admin`: Signer (must match `auth_config.admin`)  
-- `system_program`: Required
 
 ---
 
