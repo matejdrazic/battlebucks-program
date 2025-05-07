@@ -12,7 +12,7 @@ url = "https://api.apr.dev"
 
 [provider]
 cluster = "Localnet"
-wallet = "/Users/lugo/.config/solana/id.json"
+wallet = "/Users/matejdrazic-balov/Desktop/WAZxBTRpkFHmgVQC6T2CAd24Jzdm9YuDxDUK2xhkPoN.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
