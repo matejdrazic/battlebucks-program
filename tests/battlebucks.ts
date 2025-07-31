@@ -38,6 +38,16 @@ describe("battlebucks", async () => {
   const thirdPlayerWallet = anchor.web3.Keypair.generate();
   const thirdPlayerWalletPubkey = thirdPlayerWallet.publicKey;
 
+  // Additional players for the refund bug test
+  const fourthPlayerWallet = anchor.web3.Keypair.generate();
+  const fourthPlayerWalletPubkey = fourthPlayerWallet.publicKey;
+
+  const fifthPlayerWallet = anchor.web3.Keypair.generate();
+  const fifthPlayerWalletPubkey = fifthPlayerWallet.publicKey;
+
+  const sixthPlayerWallet = anchor.web3.Keypair.generate();
+  const sixthPlayerWalletPubkey = sixthPlayerWallet.publicKey;
+
   let authConfigPDA, bump, lobbyPDA, escrowPDA;
 
   // Fund the backend auth wallet
@@ -59,6 +69,21 @@ describe("battlebucks", async () => {
 
     await program.provider.connection.requestAirdrop(
       thirdPlayerWalletPubkey,
+      1000000000 // 1 SOL
+    );
+
+    await program.provider.connection.requestAirdrop(
+      fourthPlayerWalletPubkey,
+      1000000000 // 1 SOL
+    );
+
+    await program.provider.connection.requestAirdrop(
+      fifthPlayerWalletPubkey,
+      1000000000 // 1 SOL
+    );
+
+    await program.provider.connection.requestAirdrop(
+      sixthPlayerWalletPubkey,
       1000000000 // 1 SOL
     );
   });
@@ -647,8 +672,6 @@ describe("battlebucks", async () => {
     }
   });
 
-
-
   it("End game successfully", async () => {
     const lobbyId = "1";
 
@@ -902,6 +925,357 @@ describe("battlebucks", async () => {
     } catch (err) {
       expect(err).to.exist;
       // console.log("Transaction failed as expected:", err);
+    }
+  });
+
+  // NEW TEST: Reproduce the refund bug described by the client
+  it("Reproduce refund bug - lobby capacity after player leaves", async () => {
+    const lobbyId = "bug_test";
+    const buyInAmount = new anchor.BN(1000000); // 0.001 SOL
+    const maxPlayers = 4; // Set max players to 4 to match the client scenario
+
+    // Create a new lobby for this specific test
+    const [testLobbyPDA, bump] = PublicKey.findProgramAddressSync(
+      [Buffer.from("lobby"), Buffer.from(lobbyId)],
+      program.programId
+    );
+
+    const [globalStatePDA, bump2] = PublicKey.findProgramAddressSync(
+      [Buffer.from("global_state")],
+      program.programId
+    );
+
+    // Get the current auth config (updated in previous test)
+    const authConfigAccount = await program.account.authConfig.fetch(
+      authConfigPDA
+    );
+    const currentBackendAuth = authConfigAccount.backendAuthWallet;
+
+    // We need to fund the current backend auth wallet
+    await program.provider.connection.requestAirdrop(
+      currentBackendAuth,
+      1000000000 // 1 SOL
+    );
+
+    // Actually, let's reset the auth config back to use the original backend wallet for this test
+    await program.methods
+      .updateAuthConfig(wallet, backendAuthWalletPubkey, houseRakeWalletPubkey)
+      .accounts({
+        authConfig: authConfigPDA,
+        admin: wallet,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    // Create the test lobby
+    await program.methods
+      .createLobby(lobbyId, buyInAmount, maxPlayers)
+      .accounts({
+        lobby: testLobbyPDA,
+        backendAuthWallet: backendAuthWalletPubkey,
+        globalState: globalStatePDA,
+        authConfig: authConfigPDA,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([backendAuthWallet])
+      .rpc();
+
+    console.log("✓ Transaction 1: Create Lobby - Lobby was created. [OK]");
+
+    // Find the PDA for the escrow account
+    const [testEscrowPDA, bump3] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("escrow"), Buffer.from(lobbyId)],
+      program.programId
+    );
+
+    // Transaction 2: Player 1 joins
+    const [player1InLobbyPDA, bump1] =
+      anchor.web3.PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("player"),
+          Buffer.from(lobbyId),
+          playerWalletPubkey.toBuffer(),
+        ],
+        program.programId
+      );
+
+    await program.methods
+      .joinLobby(lobbyId)
+      .accounts({
+        lobby: testLobbyPDA,
+        escrow: testEscrowPDA,
+        player: player1InLobbyPDA,
+        playerWallet: playerWalletPubkey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([playerWallet])
+      .rpc();
+
+    console.log("✓ Transaction 2: Join Lobby - Player 1 joined. [OK]");
+
+    // Transaction 3: Player 2 joins
+    const [player2InLobbyPDA, bump4] =
+      anchor.web3.PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("player"),
+          Buffer.from(lobbyId),
+          secondPlayerWalletPubkey.toBuffer(),
+        ],
+        program.programId
+      );
+
+    await program.methods
+      .joinLobby(lobbyId)
+      .accounts({
+        lobby: testLobbyPDA,
+        escrow: testEscrowPDA,
+        player: player2InLobbyPDA,
+        playerWallet: secondPlayerWalletPubkey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([secondPlayerWallet])
+      .rpc();
+
+    console.log("✓ Transaction 3: Join Lobby - Player 2 joined. [OK]");
+
+    // Transaction 4: Player 3 joins
+    const [player3InLobbyPDA, bump5] =
+      anchor.web3.PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("player"),
+          Buffer.from(lobbyId),
+          thirdPlayerWalletPubkey.toBuffer(),
+        ],
+        program.programId
+      );
+
+    await program.methods
+      .joinLobby(lobbyId)
+      .accounts({
+        lobby: testLobbyPDA,
+        escrow: testEscrowPDA,
+        player: player3InLobbyPDA,
+        playerWallet: thirdPlayerWalletPubkey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([thirdPlayerWallet])
+      .rpc();
+
+    console.log("✓ Transaction 4: Join Lobby - Player 3 joined. [OK]");
+
+    // Verify we have 3 players in the lobby
+    let lobbyAccount = await program.account.lobby.fetch(testLobbyPDA);
+    expect(lobbyAccount.playerPdas.length).to.equal(3);
+    console.log("-- Up to this point, we have 3 players in the lobby --");
+
+    // Transaction 5: Player 2 refunds (leaves)
+    await program.methods
+      .refund(lobbyId)
+      .accounts({
+        lobby: testLobbyPDA,
+        escrow: testEscrowPDA,
+        player: player2InLobbyPDA,
+        playerWallet: secondPlayerWalletPubkey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([secondPlayerWallet])
+      .rpc();
+
+    console.log("✓ Transaction 5: Refund - Player 2 refunded. [OK]");
+
+    // Verify we now have 2 players in the lobby
+    lobbyAccount = await program.account.lobby.fetch(testLobbyPDA);
+    expect(lobbyAccount.playerPdas.length).to.equal(2);
+    console.log("-- Up to this point, we have 2 players in the lobby --");
+
+    // Transaction 6: Player 4 joins (should be the 3rd player now)
+    const [player4InLobbyPDA, bump6] =
+      anchor.web3.PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("player"),
+          Buffer.from(lobbyId),
+          fourthPlayerWalletPubkey.toBuffer(),
+        ],
+        program.programId
+      );
+
+    await program.methods
+      .joinLobby(lobbyId)
+      .accounts({
+        lobby: testLobbyPDA,
+        escrow: testEscrowPDA,
+        player: player4InLobbyPDA,
+        playerWallet: fourthPlayerWalletPubkey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([fourthPlayerWallet])
+      .rpc();
+
+    console.log(
+      "✓ Transaction 6: Join Lobby - Player 4 joined, but on the lobby it is the 3rd player. [OK]"
+    );
+
+    // Verify we now have 3 players in the lobby
+    lobbyAccount = await program.account.lobby.fetch(testLobbyPDA);
+    expect(lobbyAccount.playerPdas.length).to.equal(3);
+    console.log("-- Up to this point, we have 3 players in the lobby --");
+    console.log("Here is when the problem comes:");
+
+    // Transaction 7: Player 5 attempts to join (would be 4th player in the lobby)
+    const [player5InLobbyPDA, bump7] =
+      anchor.web3.PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("player"),
+          Buffer.from(lobbyId),
+          fifthPlayerWalletPubkey.toBuffer(),
+        ],
+        program.programId
+      );
+
+    let player5JoinFailed = false;
+    try {
+      await program.methods
+        .joinLobby(lobbyId)
+        .accounts({
+          lobby: testLobbyPDA,
+          escrow: testEscrowPDA,
+          player: player5InLobbyPDA,
+          playerWallet: fifthPlayerWalletPubkey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([fifthPlayerWallet])
+        .rpc();
+      console.log(
+        "✗ Transaction 7: Join Lobby - Player 5 should have failed but succeeded!"
+      );
+
+      // Fetch the lobby account to check the number of players
+      lobbyAccount = await program.account.lobby.fetch(testLobbyPDA);
+      expect(lobbyAccount.playerPdas.length).to.equal(4);
+      console.log(
+        "✓ Transaction 7: Join Lobby - Player 5 joined, but on the lobby it is the 4th player. [OK]"
+      );
+    } catch (err) {
+      player5JoinFailed = true;
+      console.log(
+        "✗ Transaction 7: Join Lobby - Player 5 attempted to join (would be 4th player in the lobby), but the transaction failed claiming 'Lobby is full'. We have 3 players here, not 4."
+      );
+    }
+
+    // Transaction 8: Player 6 attempts to join (would be 4th player in the lobby)
+    const [player6InLobbyPDA, bump8] =
+      anchor.web3.PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("player"),
+          Buffer.from(lobbyId),
+          sixthPlayerWalletPubkey.toBuffer(),
+        ],
+        program.programId
+      );
+
+    let player6JoinFailed = false;
+    try {
+      await program.methods
+        .joinLobby(lobbyId)
+        .accounts({
+          lobby: testLobbyPDA,
+          escrow: testEscrowPDA,
+          player: player6InLobbyPDA,
+          playerWallet: sixthPlayerWalletPubkey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([sixthPlayerWallet])
+        .rpc();
+      console.log(
+        "✗ Transaction 8: Join Lobby - Player 6 should have failed but succeeded!"
+      );
+    } catch (err) {
+      player6JoinFailed = true;
+      console.log(err.message);
+      console.log(
+        "✗ Transaction 8: Join Lobby - Player 6 attempted to join (would be 4th player in the lobby), but the transaction failed claiming 'Lobby is full'. We have 3 players here, not 4. - Same error as before."
+      );
+    }
+
+    console.log("-- We still have 3 players in the lobby --");
+
+    // Transaction 9: Start Game (should fail if there are only 3 players but max is 4)
+    let gameStartedSuccessfully = false;
+    try {
+      await program.methods
+        .startGame(lobbyId)
+        .accounts({
+          lobby: testLobbyPDA,
+          backendAuthWallet: backendAuthWalletPubkey,
+          authConfig: authConfigPDA,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([backendAuthWallet])
+        .rpc();
+      gameStartedSuccessfully = true;
+      console.log(
+        "✓ Transaction 9: Start Game - The game started successfully. But there were 3 players in the lobby, not 4, so it shouldn't start. [Not ok]"
+      );
+    } catch (err) {
+      console.log(
+        "✗ Transaction 9: Start Game - Failed to start game:",
+        err.message
+      );
+    }
+
+    // Verify the final state
+    lobbyAccount = await program.account.lobby.fetch(testLobbyPDA);
+    console.log(
+      `Final lobby state: ${lobbyAccount.playerPdas.length} players, max: ${lobbyAccount.maxPlayersInLobby}`
+    );
+
+    // If the bug exists, we should see the following issues:
+    // 1. Players 5 and 6 failed to join even though there should be room for one more player
+    // 2. The game started with only 3 players when it should require 4 (or at least allow 4)
+
+    // Document the findings
+    if (player5JoinFailed && player6JoinFailed) {
+      console.log(
+        "🐛 BUG REPRODUCED: Players are unable to join lobby after another player left, even though there is still capacity"
+      );
+    } else {
+      console.log("✅ No bug found: Players were able to join as expected");
+    }
+
+    if (
+      gameStartedSuccessfully &&
+      lobbyAccount.playerPdas.length < maxPlayers
+    ) {
+      console.log(
+        "🐛 BUG REPRODUCED: Game started with fewer players than max capacity"
+      );
+    }
+
+    // Transaction 10: End Game (if it started)
+    if (gameStartedSuccessfully) {
+      try {
+        await program.methods
+          .endGame(lobbyId)
+          .accounts({
+            lobby: testLobbyPDA,
+            escrow: testEscrowPDA,
+            houseWallet: houseRakeWalletPubkey,
+            recipientWallet: endGameFundsRecipientPubkey,
+            backendAuthWallet: backendAuthWalletPubkey,
+            authConfig: authConfigPDA,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .signers([backendAuthWallet])
+          .rpc();
+        console.log(
+          "✓ Transaction 10: End Game - The game ended successfully. [OK]"
+        );
+      } catch (err) {
+        console.log(
+          "✗ Transaction 10: End Game - Failed to end game:",
+          err.message
+        );
+      }
     }
   });
 });
